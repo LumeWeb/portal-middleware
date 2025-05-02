@@ -1,0 +1,53 @@
+with-expecter: true
+packages:
+  go.lumeweb.com/portal/core:
+    interfaces:
+      UserService:
+        config:
+          dir: "mocks/core"
+          outpkg: "core"
+          filename: "user_service.go"
+      AccessService:
+        config:
+          dir: "mocks/core"
+          outpkg: "core"
+          filename: "access_service.go"
+      Context:
+        config:
+          dir: "mocks/core"
+          outpkg: "core"
+          filename: "context.go"
+      Configuration:
+        config:
+          dir: "mocks/core"
+          outpkg: "core"
+          filename: "configuration.go"
+  go.lumeweb.com/portal-middleware/auth:
+    interfaces:
+      UserChecker:
+        config:
+          dir: "mocks/auth"
+          outpkg: "auth"
+          filename: "user_checker.go"
+      TokenValidator:
+        config:
+          dir: "mocks/auth"
+          outpkg: "auth"
+          filename: "token_validator.go"
+      ConfigProvider:
+        config:
+          dir: "mocks/auth"
+          outpkg: "auth"
+          filename: "config_provider.go"
+      APIProvider:
+        config:
+          dir: "mocks/auth"
+          outpkg: "auth"
+          filename: "api_provider.go"
+      CookieSetter:
+        config:
+          dir: "mocks/auth"
+          outpkg: "auth"
+          filename: "cookie_setter.go"
+  disable-version-string: true
+  issue-845-fix: true
