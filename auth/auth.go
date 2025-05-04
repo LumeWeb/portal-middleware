@@ -268,14 +268,14 @@ type claimsWrapper struct {
 }
 
 // GetClaims retrieves custom claims from context by purpose and type
-func GetClaims[T gjwt.Claims](ctx context.Context, purpose string) (T, bool) {
+func GetClaims[T gjwt.Claims](ctx context.Context, purpose jwt.JWTPurpose) (T, bool) {
 	var zero T
 	wrapper, ok := ctx.Value(claimsContextKey{}).(*claimsWrapper)
 	if !ok {
 		return zero, false
 	}
 
-	claim, exists := wrapper.Custom[purpose]
+	claim, exists := wrapper.Custom[string(purpose)]
 	if !exists {
 		return zero, false
 	}
