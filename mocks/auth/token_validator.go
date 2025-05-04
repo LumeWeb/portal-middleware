@@ -79,6 +79,74 @@ func (_c *MockTokenValidator_Validate_Call) RunAndReturn(run func(string, string
 	return _c
 }
 
+// ValidateWithClaims provides a mock function with given fields: token, purpose
+func (_m *MockTokenValidator) ValidateWithClaims(token string, purpose string) (*jwt.RegisteredClaims, map[interface{}]interface{}, error) {
+	ret := _m.Called(token, purpose)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ValidateWithClaims")
+	}
+
+	var r0 *jwt.RegisteredClaims
+	var r1 map[interface{}]interface{}
+	var r2 error
+	if rf, ok := ret.Get(0).(func(string, string) (*jwt.RegisteredClaims, map[interface{}]interface{}, error)); ok {
+		return rf(token, purpose)
+	}
+	if rf, ok := ret.Get(0).(func(string, string) *jwt.RegisteredClaims); ok {
+		r0 = rf(token, purpose)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*jwt.RegisteredClaims)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(string, string) map[interface{}]interface{}); ok {
+		r1 = rf(token, purpose)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(map[interface{}]interface{})
+		}
+	}
+
+	if rf, ok := ret.Get(2).(func(string, string) error); ok {
+		r2 = rf(token, purpose)
+	} else {
+		r2 = ret.Error(2)
+	}
+
+	return r0, r1, r2
+}
+
+// MockTokenValidator_ValidateWithClaims_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ValidateWithClaims'
+type MockTokenValidator_ValidateWithClaims_Call struct {
+	*mock.Call
+}
+
+// ValidateWithClaims is a helper method to define mock.On call
+//   - token string
+//   - purpose string
+func (_e *MockTokenValidator_Expecter) ValidateWithClaims(token interface{}, purpose interface{}) *MockTokenValidator_ValidateWithClaims_Call {
+	return &MockTokenValidator_ValidateWithClaims_Call{Call: _e.mock.On("ValidateWithClaims", token, purpose)}
+}
+
+func (_c *MockTokenValidator_ValidateWithClaims_Call) Run(run func(token string, purpose string)) *MockTokenValidator_ValidateWithClaims_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockTokenValidator_ValidateWithClaims_Call) Return(_a0 *jwt.RegisteredClaims, _a1 map[interface{}]interface{}, _a2 error) *MockTokenValidator_ValidateWithClaims_Call {
+	_c.Call.Return(_a0, _a1, _a2)
+	return _c
+}
+
+func (_c *MockTokenValidator_ValidateWithClaims_Call) RunAndReturn(run func(string, string) (*jwt.RegisteredClaims, map[interface{}]interface{}, error)) *MockTokenValidator_ValidateWithClaims_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockTokenValidator creates a new instance of MockTokenValidator. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockTokenValidator(t interface {

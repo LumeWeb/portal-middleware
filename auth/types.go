@@ -20,6 +20,7 @@ type ConfigProvider interface {
 // Implementations should verify token signatures and audience/purpose claims.
 type TokenValidator interface {
 	Validate(token string, purpose string) (*jwt.RegisteredClaims, error)
+	ValidateWithClaims(token string, purpose string) (*jwt.RegisteredClaims, map[interface{}]interface{}, error)
 }
 
 // UserChecker defines an interface for checking user account details

@@ -68,8 +68,8 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer valid.token")
 
-		mockValidator.On("Validate", "valid.token", "login").
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, nil)
+		mockValidator.On("ValidateWithClaims", "valid.token", "login").
+			Return(&gjwt.RegisteredClaims{Subject: "123"}, make(map[interface{}]interface{}), nil)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:       mockConfig,
@@ -89,8 +89,8 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer expired.token")
 
-		mockValidator.On("Validate", "expired.token", "login").
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, gjwt.ErrTokenExpired)
+		mockValidator.On("ValidateWithClaims", "expired.token", "login").
+			Return(&gjwt.RegisteredClaims{Subject: "123"}, make(map[interface{}]interface{}), gjwt.ErrTokenExpired)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
@@ -110,8 +110,8 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer wrong.purpose.token")
 
-		mockValidator.On("Validate", "wrong.purpose.token", "login").
-			Return(nil, jwt.ErrJWTInvalid)
+		mockValidator.On("ValidateWithClaims", "wrong.purpose.token", "login").
+			Return(nil, nil, jwt.ErrJWTInvalid)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:    mockConfig,

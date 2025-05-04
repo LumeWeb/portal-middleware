@@ -7,6 +7,7 @@ import (
 	gjwt "github.com/golang-jwt/jwt/v5"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"net/http"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -80,18 +81,27 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 			if validator == nil {
 				validator = &jwtValidator{config: options.Config}
 			}
-			claims, err := validator.Validate(authToken, options.Purpose)
+
+			// Get both base and custom claims
+			baseClaims, customClaims, err := validator.ValidateWithClaims(authToken, options.Purpose)
 			if err != nil && !(errors.Is(err, gjwt.ErrTokenExpired) && options.ExpiredAllowed) {
 				http.Error(w, err.Error(), http.StatusUnauthorized)
 				return
 			}
 
-			if claims != nil {
-				userID, _ := strconv.ParseUint(claims.Subject, 10, 64)
-				ctx := context.WithValue(r.Context(), mcontext.UserIDKey, uint(userID))
+			// Build context with all claims
+			ctx := r.Context()
+			if baseClaims != nil {
+				userID, _ := strconv.ParseUint(baseClaims.Subject, 10, 64)
+				ctx = context.WithValue(ctx, mcontext.UserIDKey, uint(userID))
 				ctx = context.WithValue(ctx, mcontext.AuthTokenKey, authToken)
-				r = r.WithContext(ctx)
 			}
+			if customClaims != nil {
+				for key, value := range customClaims {
+					ctx = context.WithValue(ctx, key, value)
+				}
+			}
+			r = r.WithContext(ctx)
 
 			next.ServeHTTP(w, r)
 		})
@@ -158,15 +168,64 @@ var nopVerifyFunc jwt.VerifyTokenFunc = func(claim *gjwt.RegisteredClaims) error
 }
 
 func (v *jwtValidator) Validate(token string, purpose string) (*gjwt.RegisteredClaims, error) {
+	claims, _, err := v.ValidateWithClaims(token, purpose)
+	return claims, err
+}
+
+func (v *jwtValidator) ValidateWithClaims(token string, purpose string) (*gjwt.RegisteredClaims, map[interface{}]interface{}, error) {
 	domain := v.config.GetDomain()
 	purposeTyped := jwt.JWTPurpose(purpose)
-	return JWTVerifyToken(token, domain, v.config.GetPrivateKey(), func(claim *gjwt.RegisteredClaims) error {
-		aud, _ := claim.GetAudience()
-		if purposeTyped != jwt.JWTPurposeNone && !JWTPurposeEqual(aud, purposeTyped) {
-			return jwt.ErrJWTInvalid
-		}
-		return nil
-	})
+
+	// Check for custom claims type
+	claimType, hasHandler := customClaimTypes[purpose]
+	var customClaims gjwt.Claims
+	if hasHandler {
+		customClaims = reflect.New(claimType).Interface().(gjwt.Claims)
+	} else {
+		customClaims = &gjwt.RegisteredClaims{}
+	}
+
+	// Parse token with potential custom claims
+	tokenObj, err := gjwt.ParseWithClaims(token, customClaims, func(token *gjwt.Token) (interface{}, error) {
+		return v.config.GetPrivateKey().Public(), nil
+	}, gjwt.WithValidMethods([]string{"EdDSA"}))
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !tokenObj.Valid {
+		return nil, nil, jwt.ErrJWTInvalid
+	}
+
+	// Verify standard claims
+	var baseClaims *gjwt.RegisteredClaims
+	if rc, ok := customClaims.(*gjwt.RegisteredClaims); ok {
+		baseClaims = rc
+	} else if embeder, ok := customClaims.(interface{ GetRegisteredClaims() *gjwt.RegisteredClaims }); ok {
+		baseClaims = embeder.GetRegisteredClaims()
+	} else {
+		return nil, nil, jwt.ErrJWTUnexpectedClaimsType
+	}
+
+	// Validate audience/purpose
+	aud, _ := baseClaims.GetAudience()
+	if purposeTyped != jwt.JWTPurposeNone && !JWTPurposeEqual(aud, purposeTyped) {
+		return nil, nil, jwt.ErrJWTInvalid
+	}
+
+	// Validate issuer
+	if baseClaims.Issuer != domain {
+		return nil, nil, jwt.ErrJWTUnexpectedIssuer
+	}
+
+	// Store all claims under a single context key
+	claimsMap := make(map[interface{}]interface{})
+	if hasHandler {
+		claimsMap[reflect.TypeOf(customClaims)] = customClaims
+	}
+
+	return baseClaims, claimsMap, nil
 }
 
 func NewValidator(config ConfigProvider) TokenValidator {
@@ -180,6 +239,38 @@ func JWTPurposeEqual(aud gjwt.ClaimStrings, purpose jwt.JWTPurpose) bool {
 		}
 	}
 	return false
+}
+
+// claimsContextKey is used to store all custom claims in context
+type claimsContextKey struct{}
+
+// GetClaims retrieves custom claims from context by type
+func GetClaims[T any](ctx context.Context) (T, bool) {
+	var zero T
+	claimsMap, ok := ctx.Value(claimsContextKey{}).(map[interface{}]interface{})
+	if !ok {
+		return zero, false
+	}
+
+	// Find first matching type in claims map
+	for _, claim := range claimsMap {
+		if tClaim, ok := claim.(T); ok {
+			return tClaim, true
+		}
+	}
+	return zero, false
+}
+
+// CustomClaimsHandler defines an interface for handling custom JWT claims
+type CustomClaimsHandler interface {
+	NewClaims() gjwt.Claims
+}
+
+var customClaimTypes = make(map[string]reflect.Type)
+
+// RegisterClaimsHandler registers a custom claims type for a specific JWT purpose
+func RegisterClaimsHandler(purpose string, claimType gjwt.Claims) {
+	customClaimTypes[purpose] = reflect.TypeOf(claimType)
 }
 
 // JWTVerifyToken verifies a JWT token

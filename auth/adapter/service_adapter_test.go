@@ -260,56 +260,86 @@ func TestNewAccessCheckerFromCore(t *testing.T) {
 }
 
 func TestNewAccessMiddlewareFromCore(t *testing.T) {
-	// Create a testing context
-	ctx := coreTesting.NewTestContext(t)
+	testCases := []struct {
+		name           string
+		setupMocks     func(*coreMocks.MockUserService, *coreMocks.MockAccessService)
+		userID         uint
+		expectedStatus int
+	}{
+		{
+			name: "no user in context",
+			setupMocks: func(mockUserSvc *coreMocks.MockUserService, mockAccessSvc *coreMocks.MockAccessService) {
+				// No expectations as middleware should fail early
+			},
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "user exists and access granted",
+			setupMocks: func(mockUserSvc *coreMocks.MockUserService, mockAccessSvc *coreMocks.MockAccessService) {
+				mockUserSvc.On("Exists", mock.Anything, map[string]any{"id": uint(1)}).Return(true, struct{ ID uint }{ID: 1}, nil)
+				mockAccessSvc.On("CheckAccess", uint(1), "example.com", "/api", "GET").Return(true, nil)
+			},
+			userID:         1,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "user exists but access denied",
+			setupMocks: func(mockUserSvc *coreMocks.MockUserService, mockAccessSvc *coreMocks.MockAccessService) {
+				mockUserSvc.On("Exists", mock.Anything, map[string]any{"id": uint(2)}).Return(true, struct{ ID uint }{ID: 2}, nil)
+				mockAccessSvc.On("CheckAccess", uint(2), "example.com", "/api", "GET").Return(false, nil)
+			},
+			userID:         2,
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "access check error",
+			setupMocks: func(mockUserSvc *coreMocks.MockUserService, mockAccessSvc *coreMocks.MockAccessService) {
+				mockUserSvc.On("Exists", mock.Anything, map[string]any{"id": uint(3)}).Return(true, struct{ ID uint }{ID: 3}, nil)
+				mockAccessSvc.On("CheckAccess", uint(3), "example.com", "/api", "GET").Return(false, errors.New("db error"))
+			},
+			userID:         3,
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name: "user does not exist",
+			setupMocks: func(mockUserSvc *coreMocks.MockUserService, mockAccessSvc *coreMocks.MockAccessService) {
+				mockUserSvc.On("Exists", mock.Anything, map[string]any{"id": uint(4)}).Return(false, nil, nil)
+			},
+			userID:         4,
+			expectedStatus: http.StatusUnauthorized,
+		},
+	}
 
-	// Create mockery-generated mocks
-	mockUserSvc := coreMocks.NewMockUserService(t)
-	mockAccessSvc := coreMocks.NewMockAccessService(t)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := coreTesting.NewTestContext(t)
+			mockUserSvc := coreMocks.NewMockUserService(t)
+			mockAccessSvc := coreMocks.NewMockAccessService(t)
 
-	// Set up user service expectations for the request with user ID
-	mockUserSvc.On("Exists", mock.Anything, map[string]any{"id": uint(1)}).
-		Return(true, struct{ ID uint }{ID: 1}, nil)
-	mockAccessSvc.On("CheckAccess", uint(1), mock.Anything, mock.Anything, "GET").
-		Return(true, nil)
+			tc.setupMocks(mockUserSvc, mockAccessSvc)
 
-	// Register services with the testing context
-	ctx.RegisterService(core.USER_SERVICE, mockUserSvc)
-	ctx.RegisterService(core.ACCESS_SERVICE, mockAccessSvc)
+			ctx.RegisterService(core.USER_SERVICE, mockUserSvc)
+			ctx.RegisterService(core.ACCESS_SERVICE, mockAccessSvc)
 
-	// Create the middleware
-	middleware := NewAccessMiddlewareFromCore(ctx)
-	require.NotNil(t, middleware, "Expected non-nil middleware function")
+			middleware := NewAccessMiddlewareFromCore(ctx)
+			require.NotNil(t, middleware)
 
-	// Create a test handler that the middleware will wrap
-	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
+			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+			})
+			handler := middleware(testHandler)
 
-	// Apply the middleware to the test handler
-	handler := middleware(testHandler)
+			req := httptest.NewRequest("GET", "http://example.com/api", nil)
+			if tc.userID != 0 {
+				req = req.WithContext(context.WithValue(req.Context(), mo.UserIDKey, tc.userID))
+			}
 
-	// Test 1: Request without user ID in context
-	req := httptest.NewRequest("GET", "/api", nil)
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, req)
 
-	// Should fail with unauthorized
-	assert.Equal(t, http.StatusUnauthorized, w.Code, "Expected unauthorized status when no user ID in context")
-
-	// Test 2: Request with user ID in context
-	req = httptest.NewRequest("GET", "/api", nil)
-	reqCtx := req.Context()
-	reqCtx = context.WithValue(reqCtx, mo.UserIDKey, uint(1))
-	req = req.WithContext(reqCtx)
-
-	w = httptest.NewRecorder()
-	handler.ServeHTTP(w, req)
-
-	// Should succeed now
-	assert.Equal(t, http.StatusOK, w.Code, "Expected OK status when user ID in context and access granted")
-
-	// Verify all expectations were met
-	mockUserSvc.AssertExpectations(t)
-	mockAccessSvc.AssertExpectations(t)
+			assert.Equal(t, tc.expectedStatus, w.Code)
+			mockUserSvc.AssertExpectations(t)
+			mockAccessSvc.AssertExpectations(t)
+		})
+	}
 }
