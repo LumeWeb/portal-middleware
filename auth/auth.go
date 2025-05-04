@@ -49,7 +49,7 @@ func IsValidJWT(tokenString string, secretKey ed25519.PrivateKey) bool {
 type AuthMiddlewareOptions struct {
 	Config         ConfigProvider
 	Validator      TokenValidator
-	Purpose        string
+	Purpose        jwt.JWTPurpose
 	EmptyAllowed   bool
 	ExpiredAllowed bool
 }
@@ -175,17 +175,16 @@ var nopVerifyFunc jwt.VerifyTokenFunc = func(claim *gjwt.RegisteredClaims) error
 	return nil
 }
 
-func (v *jwtValidator) Validate(token string, purpose string) (*gjwt.RegisteredClaims, error) {
+func (v *jwtValidator) Validate(token string, purpose jwt.JWTPurpose) (*gjwt.RegisteredClaims, error) {
 	claims, _, err := v.ValidateWithClaims(token, purpose)
 	return claims, err
 }
 
-func (v *jwtValidator) ValidateWithClaims(token string, purpose string) (*gjwt.RegisteredClaims, map[string]interface{}, error) {
+func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.JWTPurpose) (*gjwt.RegisteredClaims, map[string]interface{}, error) {
 	domain := v.config.GetDomain()
-	purposeTyped := jwt.JWTPurpose(purpose)
 
 	// Check for custom claims type
-	factory, hasHandler := customClaimTypes[purpose]
+	factory, hasHandler := customClaimTypes[string(purpose)]
 	var customClaims gjwt.Claims
 	if hasHandler {
 		customClaims = factory()
@@ -218,7 +217,7 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose string) (*gjwt.R
 
 	// Validate audience/purpose
 	aud, _ := baseClaims.GetAudience()
-	if purposeTyped != jwt.JWTPurposeNone && !JWTPurposeEqual(aud, purposeTyped) {
+	if purpose != jwt.JWTPurposeNone && !JWTPurposeEqual(aud, purpose) {
 		return nil, nil, jwt.ErrJWTInvalid
 	}
 
@@ -234,7 +233,7 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose string) (*gjwt.R
 	}
 
 	if hasHandler {
-		wrapper.Custom[purpose] = customClaims
+		wrapper.Custom[string(purpose)] = customClaims
 	}
 
 	// Convert custom claims to generic map

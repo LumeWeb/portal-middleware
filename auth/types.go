@@ -2,7 +2,8 @@ package auth
 
 import (
 	"crypto/ed25519"
-	"github.com/golang-jwt/jwt/v5"
+	gjwt "github.com/golang-jwt/jwt/v5"
+	"go.lumeweb.com/portal-middleware/auth/jwt"
 )
 
 // ConfigProvider defines an interface for accessing configuration needed by auth middleware
@@ -19,8 +20,8 @@ type ConfigProvider interface {
 // TokenValidator handles JWT token validation and claims extraction.
 // Implementations should verify token signatures and audience/purpose claims.
 type TokenValidator interface {
-	Validate(token string, purpose string) (*jwt.RegisteredClaims, error)
-	ValidateWithClaims(token string, purpose string) (*jwt.RegisteredClaims, map[string]interface{}, error)
+	Validate(token string, purpose jwt.JWTPurpose) (*gjwt.RegisteredClaims, error)
+	ValidateWithClaims(token string, purpose jwt.JWTPurpose) (*gjwt.RegisteredClaims, map[string]interface{}, error)
 }
 
 // UserChecker defines an interface for checking user account details
@@ -30,6 +31,7 @@ type UserChecker interface {
 	AccountExists(userID uint) (bool, error)
 	IsAccountVerified(userID uint) (bool, error)
 }
+
 // AccessChecker determines if a user has access to specific resources.
 // Evaluates permissions based on user ID, host, path, and HTTP method.
 type AccessChecker interface {

@@ -68,13 +68,13 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer valid.token")
 
-		mockValidator.On("ValidateWithClaims", "valid.token", "login").
+		mockValidator.On("ValidateWithClaims", "valid.token", jwt.JWTPurposeLogin).
 			Return(&gjwt.RegisteredClaims{Subject: "123"}, make(map[string]interface{}), nil)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:       mockConfig,
 			Validator:    mockValidator,
-			Purpose:      "login",
+			Purpose:      jwt.JWTPurposeLogin,
 			EmptyAllowed: false,
 		})
 
@@ -89,13 +89,13 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer expired.token")
 
-		mockValidator.On("ValidateWithClaims", "expired.token", "login").
+		mockValidator.On("ValidateWithClaims", "expired.token", jwt.JWTPurposeLogin).
 			Return(&gjwt.RegisteredClaims{Subject: "123"}, make(map[string]interface{}), gjwt.ErrTokenExpired)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
-			Purpose:        "login",
+			Purpose:        jwt.JWTPurposeLogin, 
 			ExpiredAllowed: true,
 		})
 
@@ -110,13 +110,13 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer wrong.purpose.token")
 
-		mockValidator.On("ValidateWithClaims", "wrong.purpose.token", "login").
+		mockValidator.On("ValidateWithClaims", "wrong.purpose.token", jwt.JWTPurposeLogin).
 			Return(nil, nil, jwt.ErrJWTInvalid)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:    mockConfig,
 			Validator: mockValidator,
-			Purpose:   "login",
+			Purpose:   jwt.JWTPurposeLogin,
 		})
 
 		rr := httptest.NewRecorder()
@@ -142,7 +142,7 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer "+tokenString)
 
-		mockValidator.On("ValidateWithClaims", tokenString, "test_purpose").
+		mockValidator.On("ValidateWithClaims", tokenString, jwt.JWTPurpose("test_purpose")).
 			Return(&gjwt.RegisteredClaims{Subject: "123"}, map[string]interface{}{"test_purpose": &customClaims{
 				RegisteredClaims: &gjwt.RegisteredClaims{Subject: "123"},
 				CustomField:      "test_value",
@@ -151,7 +151,7 @@ func TestAuthMiddleware(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:       mockConfig,
 			Validator:    mockValidator,
-			Purpose:      "test_purpose",
+			Purpose:      jwt.JWTPurpose("test_purpose"),
 			EmptyAllowed: false,
 		})
 
