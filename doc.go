@@ -21,9 +21,9 @@
 //   - Token revocation and expiration handling
 //   - Example:
 //     authMiddleware := auth.AuthMiddleware(auth.AuthMiddlewareOptions{
-//     Config: config,
-//     Purpose: "api-access",
-//     ExpiredAllowed: false,
+//         Config: config,       // Required
+//         Purpose: "api-access",// Required
+//         ExpiredAllowed: false,
 //     })
 //
 // 2. Authorization Middleware:
@@ -52,6 +52,29 @@
 //   - Account status checks
 //   - Example:
 //     verifiedMiddleware := middleware.AccountVerifiedMiddleware(ctx)
+//
+// # Custom Claims Example
+//
+// Define custom claims type:
+//
+//	type CustomClaims struct {
+//		*gjwt.RegisteredClaims
+//		Role string `json:"role"`
+//	}
+//
+// Register claims type during initialization:
+//
+//	auth.RegisterClaimsType("api-access", func() gjwt.Claims { return &CustomClaims{} })
+//
+// Retrieve in handler:
+//
+//	claims, ok := auth.GetClaims[CustomClaims](ctx, "api-access")
+//
+// # GetClaims Function
+//
+// GetClaims retrieves custom claims from context by purpose and type
+// Example:
+// claims, ok := GetClaims[CustomClaims](ctx, "api-access")
 //
 // # Example Application Setup
 //

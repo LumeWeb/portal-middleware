@@ -80,7 +80,7 @@ func (_c *MockTokenValidator_Validate_Call) RunAndReturn(run func(string, string
 }
 
 // ValidateWithClaims provides a mock function with given fields: token, purpose
-func (_m *MockTokenValidator) ValidateWithClaims(token string, purpose string) (*jwt.RegisteredClaims, map[interface{}]interface{}, error) {
+func (_m *MockTokenValidator) ValidateWithClaims(token string, purpose string) (*jwt.RegisteredClaims, map[string]interface{}, error) {
 	ret := _m.Called(token, purpose)
 
 	if len(ret) == 0 {
@@ -88,9 +88,9 @@ func (_m *MockTokenValidator) ValidateWithClaims(token string, purpose string) (
 	}
 
 	var r0 *jwt.RegisteredClaims
-	var r1 map[interface{}]interface{}
+	var r1 map[string]interface{}
 	var r2 error
-	if rf, ok := ret.Get(0).(func(string, string) (*jwt.RegisteredClaims, map[interface{}]interface{}, error)); ok {
+	if rf, ok := ret.Get(0).(func(string, string) (*jwt.RegisteredClaims, map[string]interface{}, error)); ok {
 		return rf(token, purpose)
 	}
 	if rf, ok := ret.Get(0).(func(string, string) *jwt.RegisteredClaims); ok {
@@ -101,11 +101,11 @@ func (_m *MockTokenValidator) ValidateWithClaims(token string, purpose string) (
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(string, string) map[interface{}]interface{}); ok {
+	if rf, ok := ret.Get(1).(func(string, string) map[string]interface{}); ok {
 		r1 = rf(token, purpose)
 	} else {
 		if ret.Get(1) != nil {
-			r1 = ret.Get(1).(map[interface{}]interface{})
+			r1 = ret.Get(1).(map[string]interface{})
 		}
 	}
 
@@ -137,12 +137,12 @@ func (_c *MockTokenValidator_ValidateWithClaims_Call) Run(run func(token string,
 	return _c
 }
 
-func (_c *MockTokenValidator_ValidateWithClaims_Call) Return(_a0 *jwt.RegisteredClaims, _a1 map[interface{}]interface{}, _a2 error) *MockTokenValidator_ValidateWithClaims_Call {
+func (_c *MockTokenValidator_ValidateWithClaims_Call) Return(_a0 *jwt.RegisteredClaims, _a1 map[string]interface{}, _a2 error) *MockTokenValidator_ValidateWithClaims_Call {
 	_c.Call.Return(_a0, _a1, _a2)
 	return _c
 }
 
-func (_c *MockTokenValidator_ValidateWithClaims_Call) RunAndReturn(run func(string, string) (*jwt.RegisteredClaims, map[interface{}]interface{}, error)) *MockTokenValidator_ValidateWithClaims_Call {
+func (_c *MockTokenValidator_ValidateWithClaims_Call) RunAndReturn(run func(string, string) (*jwt.RegisteredClaims, map[string]interface{}, error)) *MockTokenValidator_ValidateWithClaims_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -44,7 +44,7 @@ func main() {
 	chain := util.New(router).
 		WithAuth(auth.AuthMiddlewareOptions{
 			Config:  config,
-			Purpose: "api-access",
+			Purpose: "api-access",  // Required for claims validation
 		}).
 		WithCORS(cors.Config{
 			AllowedOrigins: []string{"https://example.com"},
@@ -90,9 +90,12 @@ func (c *MyConfig) GetDomain() string {
 
 - Token expiration enforcement
 - SameSite cookie policies
+- Type-safe custom claims handling
+- Purpose-specific claim validation
 - Audience claim validation
 - CSRF protection headers
 - Automatic token revocation
+- Mandatory configuration checks
 
 ## Testing
 

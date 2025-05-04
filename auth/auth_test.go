@@ -69,7 +69,7 @@ func TestAuthMiddleware(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer valid.token")
 
 		mockValidator.On("ValidateWithClaims", "valid.token", "login").
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, make(map[interface{}]interface{}), nil)
+			Return(&gjwt.RegisteredClaims{Subject: "123"}, make(map[string]interface{}), nil)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:       mockConfig,
@@ -90,7 +90,7 @@ func TestAuthMiddleware(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer expired.token")
 
 		mockValidator.On("ValidateWithClaims", "expired.token", "login").
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, make(map[interface{}]interface{}), gjwt.ErrTokenExpired)
+			Return(&gjwt.RegisteredClaims{Subject: "123"}, make(map[string]interface{}), gjwt.ErrTokenExpired)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
@@ -124,6 +124,76 @@ func TestAuthMiddleware(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	})
+
+	t.Run("custom claims registration", func(t *testing.T) {
+		type customClaims struct {
+			*gjwt.RegisteredClaims
+			CustomField string `json:"custom_field"`
+		}
+		RegisterClaimsType("test_purpose", func() gjwt.Claims {
+			return &customClaims{}
+		})
+		defer delete(customClaimTypes, "test_purpose")
+
+		tokenString, err := CreateJWTToken(privKey, "test.com", "user123", jwt.JWTPurpose("test_purpose"), time.Hour)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", "Bearer "+tokenString)
+
+		mockValidator.On("ValidateWithClaims", tokenString, "test_purpose").
+			Return(&gjwt.RegisteredClaims{Subject: "123"}, map[string]interface{}{"test_purpose": &customClaims{
+				RegisteredClaims: &gjwt.RegisteredClaims{Subject: "123"},
+				CustomField:      "test_value",
+			}}, nil)
+
+		middleware := AuthMiddleware(AuthMiddlewareOptions{
+			Config:       mockConfig,
+			Validator:    mockValidator,
+			Purpose:      "test_purpose",
+			EmptyAllowed: false,
+		})
+
+		rr := httptest.NewRecorder()
+		customHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := GetClaims[*customClaims](r.Context(), "test_purpose")
+			assert.True(t, ok, "should retrieve custom claims")
+			assert.Equal(t, "test_value", claims.CustomField)
+			w.WriteHeader(http.StatusOK)
+		})
+		handler := middleware(customHandler)
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("missing config panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("Expected panic for missing config")
+			} else {
+				assert.Contains(t, r.(string), "ConfigProvider", "panic message should mention ConfigProvider")
+			}
+		}()
+
+		AuthMiddleware(AuthMiddlewareOptions{
+			Purpose: "login",
+		})
+	})
+
+	t.Run("missing purpose panics", func(t *testing.T) {
+		defer func() {
+			if r := recover(); r == nil {
+				t.Errorf("Expected panic for missing purpose")
+			} else {
+				assert.Contains(t, r.(string), "Purpose", "panic message should mention Purpose")
+			}
+		}()
+
+		AuthMiddleware(AuthMiddlewareOptions{
+			Config: mockConfig,
+		})
 	})
 }
 

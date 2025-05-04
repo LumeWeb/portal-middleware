@@ -7,7 +7,6 @@ import (
 	gjwt "github.com/golang-jwt/jwt/v5"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"net/http"
-	"reflect"
 	"strconv"
 	"strings"
 
@@ -60,6 +59,13 @@ type AuthMiddlewareOptions struct {
 // Handles token validation errors and expired tokens according to configuration.
 // Returns a handler that can be chained with other middleware.
 func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handler {
+	if options.Config == nil {
+		panic("AuthMiddleware requires a ConfigProvider")
+	}
+	if options.Purpose == "" {
+		panic("AuthMiddleware requires a Purpose")
+	}
+
 	findToken := func(r *http.Request) string {
 		return FindAuthToken(r, options.Config.GetPrivateKey(),
 			options.Config.GetAuthCookieName(), options.Config.GetAuthTokenName())
@@ -95,11 +101,13 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 				userID, _ := strconv.ParseUint(baseClaims.Subject, 10, 64)
 				ctx = context.WithValue(ctx, mcontext.UserIDKey, uint(userID))
 				ctx = context.WithValue(ctx, mcontext.AuthTokenKey, authToken)
-			}
-			if customClaims != nil {
-				for key, value := range customClaims {
-					ctx = context.WithValue(ctx, key, value)
+
+				// Store claims in unified wrapper
+				wrapper := &claimsWrapper{
+					Base:   baseClaims,
+					Custom: customClaims,
 				}
+				ctx = context.WithValue(ctx, claimsContextKey{}, wrapper)
 			}
 			r = r.WithContext(ctx)
 
@@ -172,15 +180,15 @@ func (v *jwtValidator) Validate(token string, purpose string) (*gjwt.RegisteredC
 	return claims, err
 }
 
-func (v *jwtValidator) ValidateWithClaims(token string, purpose string) (*gjwt.RegisteredClaims, map[interface{}]interface{}, error) {
+func (v *jwtValidator) ValidateWithClaims(token string, purpose string) (*gjwt.RegisteredClaims, map[string]interface{}, error) {
 	domain := v.config.GetDomain()
 	purposeTyped := jwt.JWTPurpose(purpose)
 
 	// Check for custom claims type
-	claimType, hasHandler := customClaimTypes[purpose]
+	factory, hasHandler := customClaimTypes[purpose]
 	var customClaims gjwt.Claims
 	if hasHandler {
-		customClaims = reflect.New(claimType).Interface().(gjwt.Claims)
+		customClaims = factory()
 	} else {
 		customClaims = &gjwt.RegisteredClaims{}
 	}
@@ -219,13 +227,22 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose string) (*gjwt.R
 		return nil, nil, jwt.ErrJWTUnexpectedIssuer
 	}
 
-	// Store all claims under a single context key
-	claimsMap := make(map[interface{}]interface{})
-	if hasHandler {
-		claimsMap[reflect.TypeOf(customClaims)] = customClaims
+	// Store claims in unified wrapper
+	wrapper := &claimsWrapper{
+		Base:   baseClaims,
+		Custom: make(map[string]interface{}),
 	}
 
-	return baseClaims, claimsMap, nil
+	if hasHandler {
+		wrapper.Custom[purpose] = customClaims
+	}
+
+	// Convert custom claims to generic map
+	customMap := make(map[string]interface{})
+	for k, v := range wrapper.Custom {
+		customMap[k] = v
+	}
+	return baseClaims, customMap, nil
 }
 
 func NewValidator(config ConfigProvider) TokenValidator {
@@ -241,37 +258,38 @@ func JWTPurposeEqual(aud gjwt.ClaimStrings, purpose jwt.JWTPurpose) bool {
 	return false
 }
 
-// claimsContextKey is used to store all custom claims in context
+// claimsContextKey is used to store all claims in context
 type claimsContextKey struct{}
 
-// GetClaims retrieves custom claims from context by type
-func GetClaims[T any](ctx context.Context) (T, bool) {
+// claimsWrapper contains both base and custom claims
+type claimsWrapper struct {
+	Base   *gjwt.RegisteredClaims
+	Custom map[string]interface{}
+}
+
+// GetClaims retrieves custom claims from context by purpose and type
+func GetClaims[T gjwt.Claims](ctx context.Context, purpose string) (T, bool) {
 	var zero T
-	claimsMap, ok := ctx.Value(claimsContextKey{}).(map[interface{}]interface{})
+	wrapper, ok := ctx.Value(claimsContextKey{}).(*claimsWrapper)
 	if !ok {
 		return zero, false
 	}
 
-	// Find first matching type in claims map
-	for _, claim := range claimsMap {
-		if tClaim, ok := claim.(T); ok {
-			return tClaim, true
-		}
+	claim, exists := wrapper.Custom[purpose]
+	if !exists {
+		return zero, false
 	}
-	return zero, false
+
+	tClaim, ok := claim.(T)
+	return tClaim, ok
 }
 
-// CustomClaimsHandler defines an interface for handling custom JWT claims
-type CustomClaimsHandler interface {
-	NewClaims() gjwt.Claims
+// RegisterClaimsType registers a custom claims type for a specific JWT purpose
+func RegisterClaimsType(purpose string, factory func() gjwt.Claims) {
+	customClaimTypes[purpose] = factory
 }
 
-var customClaimTypes = make(map[string]reflect.Type)
-
-// RegisterClaimsHandler registers a custom claims type for a specific JWT purpose
-func RegisterClaimsHandler(purpose string, claimType gjwt.Claims) {
-	customClaimTypes[purpose] = reflect.TypeOf(claimType)
-}
+var customClaimTypes = make(map[string]func() gjwt.Claims)
 
 // JWTVerifyToken verifies a JWT token
 func JWTVerifyToken(tokenString string, domain string, privateKey ed25519.PrivateKey,
