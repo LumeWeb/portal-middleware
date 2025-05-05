@@ -43,8 +43,8 @@ func NewAPIProvider() auth.APIProvider {
 }
 
 // SetJWTCookie sets a JWT token as a cookie using ConfigProvider
-func (s *coreCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
-	purpose jwt.JWTPurpose, expiry time.Duration, opts ...auth.ClaimModifier) (string, error) {
+func (s *coreCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose,
+	expiry time.Duration, opts ...auth.JWTOption) (string, error) {
 
 	tokenString, err := auth.CreateJWTToken(
 		s.config.GetPrivateKey(),
@@ -116,8 +116,8 @@ func newDomainCookieSetter(base auth.CookieSetter, domain string) *domainCookieS
 	}
 }
 
-func (d *domainCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, 
-	expiry time.Duration, opts ...auth.ClaimModifier) (string, error) {
+func (d *domainCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose,
+	expiry time.Duration, opts ...auth.JWTOption) (string, error) {
 	// Get config from base but override domain
 	config := d.base.(*coreCookieSetter).config
 
@@ -175,7 +175,7 @@ type chainedCookieSetter struct {
 	setters []auth.CookieSetter
 }
 
-func (c *chainedCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, expiry time.Duration, opts ...auth.ClaimModifier) (string, error) {
+func (c *chainedCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, expiry time.Duration, opts ...auth.JWTOption) (string, error) {
 	var token string
 	var err error
 	for _, setter := range c.setters {

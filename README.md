@@ -7,7 +7,7 @@ Secure middleware package for Go web applications providing authentication, auth
 ## Features
 
 - JWT-based authentication with Ed25519 signatures
-- Role-Based Access Control (RBAC)
+- Role-Based Access Control (RBAC) with path pattern matching
 - CORS configuration with security best practices
 - Swagger/OpenAPI 3.0 documentation support
 - TUS protocol v1.0.0 extensions for resumable uploads
@@ -65,9 +65,11 @@ func main() {
 
 Implement the `ConfigProvider` interface to provide:
 - Ed25519 private key for JWT signing
-- Domain names for token validation
-- Cookie security settings
-- API endpoint configurations
+- Domain name for token validation
+- Cookie security settings (SameSite, Secure, HttpOnly)
+- API endpoint configurations for multi-domain deployments
+
+Example implementation:
 
 ```go
 type MyConfig struct {
@@ -83,19 +85,25 @@ func (c *MyConfig) GetDomain() string {
 	return c.domain
 }
 
-// Implement remaining interface methods...
+func (c *MyConfig) GetAuthCookieName() string {
+	return "auth_token"
+}
+
+func (c *MyConfig) GetAuthTokenName() string {
+	return "auth_token"
+}
 ```
 
 ## Security Features
 
-- Token expiration enforcement
-- SameSite cookie policies
+- Token expiration enforcement with optional refresh
+- SameSite cookie policies to prevent CSRF
 - Type-safe custom claims handling
 - Purpose-specific claim validation
 - Audience claim validation
-- CSRF protection headers
-- Automatic token revocation
-- Mandatory configuration checks
+- Contextual user ID injection
+- Automatic token revocation detection
+- HSTS-ready security headers
 
 ## Testing
 

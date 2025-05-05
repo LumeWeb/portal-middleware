@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	authmocks "go.lumeweb.com/portal-middleware/mocks/auth"
+	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal/core"
 	coreTesting "go.lumeweb.com/portal/core/testing"
 	coreMocks "go.lumeweb.com/portal/core/testing/mocks"
@@ -40,7 +40,8 @@ func TestCoreAPIProvider_GetAPIs(t *testing.T) {
 }
 
 func TestCoreCookieSetter(t *testing.T) {
-	mockConfig := &authmocks.MockConfigProvider{}
+
+	mockConfig := auth.NewMockConfigProvider(t)
 	_, privKey, _ := ed25519.GenerateKey(nil)
 
 	mockConfig.On("GetPrivateKey").Return(privKey)

@@ -21,7 +21,7 @@ type ConfigProvider interface {
 // Implementations should verify token signatures and audience/purpose claims.
 type TokenValidator interface {
 	Validate(token string, purpose jwt.JWTPurpose) (*gjwt.RegisteredClaims, error)
-	ValidateWithClaims(token string, purpose jwt.JWTPurpose) (*gjwt.RegisteredClaims, map[string]interface{}, error)
+	ValidateWithClaims(token string, purpose jwt.JWTPurpose) (*gjwt.RegisteredClaims, gjwt.Claims, error)
 }
 
 // UserChecker defines an interface for checking user account details
@@ -40,6 +40,26 @@ type AccessChecker interface {
 
 // ClaimModifier defines a function type for modifying JWT claims
 type ClaimModifier func(claims gjwt.Claims)
+
+// JWTOption defines the interface for JWT configuration options
+type JWTOption interface {
+	Apply(*jwtOptions)
+}
+
+type jwtOptions struct {
+	claims    gjwt.Claims
+	modifiers []ClaimModifier
+}
+
+// WithClaimsOpt implements JWTOption to specify custom claims
+type WithClaimsOpt struct{ claims gjwt.Claims }
+func (o WithClaimsOpt) Apply(opts *jwtOptions) { opts.claims = o.claims }
+func WithClaims(c gjwt.Claims) JWTOption       { return WithClaimsOpt{c} }
+
+// WithModifiersOpt implements JWTOption to add claim modifiers
+type WithModifiersOpt struct{ modifiers []ClaimModifier }
+func (o WithModifiersOpt) Apply(opts *jwtOptions) { opts.modifiers = append(opts.modifiers, o.modifiers...) }
+func WithModifiers(m ...ClaimModifier) JWTOption  { return WithModifiersOpt{m} }
 
 // Auth token constants
 const (

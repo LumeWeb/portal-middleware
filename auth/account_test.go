@@ -8,11 +8,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.lumeweb.com/portal-middleware/context"
-	authmocks "go.lumeweb.com/portal-middleware/mocks/auth"
 )
 
 func TestAccountVerifiedMiddleware(t *testing.T) {
-	mockChecker := authmocks.NewMockUserChecker(t)
+	mockChecker := NewMockUserChecker(t)
 	middleware := AccountVerified(mockChecker)
 
 	t.Run("verified user", func(t *testing.T) {

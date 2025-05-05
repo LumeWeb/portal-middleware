@@ -8,12 +8,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"go.lumeweb.com/portal-middleware/context"
-	authmocks "go.lumeweb.com/portal-middleware/mocks/auth"
 	coreMocks "go.lumeweb.com/portal/core/testing/mocks"
 )
 
 func TestAccessMiddleware(t *testing.T) {
-	mockUserChecker := authmocks.NewMockUserChecker(t)
+	mockUserChecker := NewMockUserChecker(t)
 	mockAccessChecker := coreMocks.NewMockAccessService(t)
 	middleware := AccessMiddleware(mockUserChecker, mockAccessChecker)
 

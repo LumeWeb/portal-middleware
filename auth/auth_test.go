@@ -11,56 +11,16 @@ import (
 	gjwt "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	authmocks "go.lumeweb.com/portal-middleware/mocks/auth"
 )
 
-func TestParseAuthTokenHeader(t *testing.T) {
-	tests := []struct {
-		name        string
-		headerValue string
-		expected    string
-	}{
-		{"Bearer prefix", "Bearer token123", "token123"},
-		{"lowercase bearer", "bearer token456", "token456"},
-		{"no prefix", "token789", "token789"},
-		{"empty header", "", ""},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest("GET", "/", nil)
-			req.Header.Set("Authorization", tt.headerValue)
-			result := ParseAuthTokenHeader(req.Header)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
-func TestIsValidJWT(t *testing.T) {
-	_, priv, _ := ed25519.GenerateKey(nil)
-	validToken, _ := CreateJWTToken(priv, "test.com", "user1", jwt.JWTPurposeLogin, time.Hour)
-
-	t.Run("valid token", func(t *testing.T) {
-		assert.True(t, IsValidJWT(validToken, priv))
-	})
-
-	t.Run("invalid token", func(t *testing.T) {
-		assert.False(t, IsValidJWT("invalid.token", priv))
-	})
-
-	t.Run("wrong key", func(t *testing.T) {
-		_, wrongPriv, _ := ed25519.GenerateKey(nil)
-		assert.False(t, IsValidJWT(validToken, wrongPriv))
-	})
-}
-
 func TestAuthMiddleware(t *testing.T) {
-	mockConfig := authmocks.NewMockConfigProvider(t)
-	mockValidator := authmocks.NewMockTokenValidator(t)
+	mockConfig := NewMockConfigProvider(t)
+	mockValidator := NewMockTokenValidator(t)
 
 	// Setup mock config to return a valid private key
 	_, privKey, _ := ed25519.GenerateKey(nil)
 	mockConfig.On("GetPrivateKey").Return(privKey)
+	mockConfig.On("GetDomain").Return("test.com")
 	mockConfig.On("GetAuthCookieName").Return("auth_cookie")
 	mockConfig.On("GetAuthTokenName").Return("auth_token")
 
@@ -69,7 +29,7 @@ func TestAuthMiddleware(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer valid.token")
 
 		mockValidator.On("ValidateWithClaims", "valid.token", jwt.JWTPurposeLogin).
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, make(map[string]interface{}), nil)
+			Return(&gjwt.RegisteredClaims{Subject: "123"}, (*gjwt.RegisteredClaims)(nil), nil)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:       mockConfig,
@@ -85,17 +45,38 @@ func TestAuthMiddleware(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
+	t.Run("invalid token", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", "Bearer invalid.token")
+
+		mockValidator.On("ValidateWithClaims", "invalid.token", jwt.JWTPurposeLogin).
+			Return(nil, nil, jwt.ErrJWTInvalid)
+
+		middleware := AuthMiddleware(AuthMiddlewareOptions{
+			Config:    mockConfig,
+			Validator: mockValidator,
+			Purpose:   jwt.JWTPurposeLogin,
+		})
+
+		rr := httptest.NewRecorder()
+		handler := middleware(testHandler)
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	})
+
 	t.Run("expired but allowed", func(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer expired.token")
 
 		mockValidator.On("ValidateWithClaims", "expired.token", jwt.JWTPurposeLogin).
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, make(map[string]interface{}), gjwt.ErrTokenExpired)
+			Return(&gjwt.RegisteredClaims{Subject: "123"}, (*gjwt.RegisteredClaims)(nil), gjwt.ErrTokenExpired)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
 			Purpose:        jwt.JWTPurposeLogin,
+			EmptyAllowed:   false,
 			ExpiredAllowed: true,
 		})
 
@@ -131,13 +112,11 @@ func TestAuthMiddleware(t *testing.T) {
 			*gjwt.RegisteredClaims
 			CustomField string `json:"custom_field"`
 		}
-		RegisterClaimsType("test_purpose", func() gjwt.Claims {
-			return &customClaims{}
-		})
-		defer delete(customClaimTypes, "test_purpose")
 
 		tokenString, err := CreateJWTToken(privKey, "test.com", "user123",
-			jwt.JWTPurpose("test_purpose"), time.Hour, ClaimModifier(func(claims gjwt.Claims) {
+			jwt.JWTPurpose("test_purpose"), time.Hour,
+			WithClaims(&customClaims{}),
+			WithModifiers(func(claims gjwt.Claims) {
 				if cc, ok := claims.(*customClaims); ok {
 					cc.CustomField = "test_value"
 				}
@@ -148,10 +127,10 @@ func TestAuthMiddleware(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer "+tokenString)
 
 		mockValidator.On("ValidateWithClaims", tokenString, jwt.JWTPurpose("test_purpose")).
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, map[string]interface{}{"test_purpose": &customClaims{
+			Return(&gjwt.RegisteredClaims{Subject: "123"}, &customClaims{
 				RegisteredClaims: &gjwt.RegisteredClaims{Subject: "123"},
 				CustomField:      "test_value",
-			}}, nil)
+			}, nil)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:       mockConfig,
@@ -162,7 +141,7 @@ func TestAuthMiddleware(t *testing.T) {
 
 		rr := httptest.NewRecorder()
 		customHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			claims, ok := GetClaims[*customClaims](r.Context(), "test_purpose")
+			claims, ok := GetClaims[*customClaims](r.Context())
 			assert.True(t, ok, "should retrieve custom claims")
 			assert.Equal(t, "test_value", claims.CustomField)
 			w.WriteHeader(http.StatusOK)
@@ -199,57 +178,5 @@ func TestAuthMiddleware(t *testing.T) {
 		AuthMiddleware(AuthMiddlewareOptions{
 			Config: mockConfig,
 		})
-	})
-}
-
-func TestFindAuthToken(t *testing.T) {
-	_, priv, _ := ed25519.GenerateKey(nil)
-	validToken, _ := CreateJWTToken(priv, "test.com", "user1", jwt.JWTPurposeLogin, time.Hour)
-
-	t.Run("header first", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Authorization", "Bearer "+validToken)
-		result := FindAuthToken(req, priv, "auth_cookie", "auth_token")
-		assert.Equal(t, validToken, result)
-	})
-
-	t.Run("cookie fallback", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/", nil)
-		req.AddCookie(&http.Cookie{Name: "auth_cookie", Value: validToken})
-		result := FindAuthToken(req, priv, "auth_cookie", "auth_token")
-		assert.Equal(t, validToken, result)
-	})
-
-	t.Run("query param last", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/?auth_token="+validToken, nil)
-		result := FindAuthToken(req, priv, "auth_cookie", "auth_token")
-		assert.Equal(t, validToken, result)
-	})
-}
-
-func TestJWTVerifyToken(t *testing.T) {
-	_, priv, _ := ed25519.GenerateKey(nil)
-	validToken, _ := CreateJWTToken(priv, "test.com", "user1", jwt.JWTPurposeLogin, time.Hour)
-
-	t.Run("valid token", func(t *testing.T) {
-		claims, err := JWTVerifyToken(validToken, "test.com", priv, func(c *gjwt.RegisteredClaims) error {
-			if c.Subject != "user1" {
-				return jwt.ErrJWTInvalid
-			}
-			return nil
-		})
-		require.NoError(t, err)
-		assert.Equal(t, "user1", claims.Subject)
-	})
-
-	t.Run("invalid issuer", func(t *testing.T) {
-		_, err := JWTVerifyToken(validToken, "wrong.com", priv, nil)
-		assert.ErrorIs(t, err, jwt.ErrJWTUnexpectedIssuer)
-	})
-
-	t.Run("expired token", func(t *testing.T) {
-		expiredToken, _ := CreateJWTToken(priv, "test.com", "user1", jwt.JWTPurposeLogin, -time.Hour)
-		_, err := JWTVerifyToken(expiredToken, "test.com", priv, nil)
-		assert.ErrorIs(t, err, gjwt.ErrTokenExpired)
 	})
 }

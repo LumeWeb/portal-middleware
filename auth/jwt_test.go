@@ -12,8 +12,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	authmocks "go.lumeweb.com/portal-middleware/mocks/auth"
 )
 
 func TestCreateJWTToken(t *testing.T) {
@@ -100,8 +98,8 @@ func TestSendJWT(t *testing.T) {
 }
 
 func TestCookieSetter(t *testing.T) {
-	config := &authmocks.MockConfigProvider{}
-	apis := &authmocks.MockAPIProvider{}
+	config := NewMockConfigProvider(t)
+	apis := NewMockAPIProvider(t)
 	config.On("GetPrivateKey").Return(ed25519.NewKeyFromSeed(make([]byte, 32)))
 	config.On("GetDomain").Return("test.com")
 	config.On("GetAuthCookieName").Return("auth")

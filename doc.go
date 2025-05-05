@@ -17,8 +17,7 @@
 // 1. Authentication Middleware:
 //   - Token creation/validation with purpose-specific claims
 //   - Cookie-based session management with automatic refresh
-//   - Multiple authentication sources (header, cookie, query param)
-//   - Token revocation and expiration handling
+//   - Integration with ConfigProvider for security settings
 //   - Example:
 //     authMiddleware := auth.AuthMiddleware(auth.AuthMiddlewareOptions{
 //         Config: config,       // Required
@@ -31,10 +30,7 @@
 //   - Resource path pattern matching
 //   - Integration with user directory services
 //   - Example:
-//     accessMiddleware := auth.AccessMiddleware(
-//     userChecker,
-//     accessChecker,
-//     )
+//     accessMiddleware := auth.AccessMiddleware(userChecker, accessChecker)
 //
 // 3. Security Utilities:
 //   - CORS with safe defaults and custom rules
@@ -62,39 +58,36 @@
 //		Role string `json:"role"`
 //	}
 //
-// Register claims type during initialization:
-//
-//	auth.RegisterClaimsType("api-access", func() gjwt.Claims { return &CustomClaims{} })
-//
 // Create token with custom claims:
 //
 //	token, err := auth.CreateJWTToken(privateKey, "domain.com", "user123", 
-//		auth.JWTPurposeLogin, time.Hour,
-//		func(claims gjwt.Claims) {
+//		jwt.JWTPurposeLogin, time.Hour,
+//		auth.WithClaims(&CustomClaims{}),
+//		auth.WithModifiers(func(claims gjwt.Claims) {
 //			if cc, ok := claims.(*CustomClaims); ok {
 //				cc.Role = "admin"
 //			}
-//		})
+//		}))
 //
 // Retrieve in handler:
 //
-//	claims, ok := auth.GetClaims[CustomClaims](ctx, "api-access")
+//	claims, ok := auth.GetClaims[*CustomClaims](r.Context())
 //	if ok {
 //		log.Printf("User role: %s", claims.Role)
 //	}
 //
 // # GetClaims Function
 //
-// GetClaims retrieves custom claims from context by purpose and type.
+// GetClaims retrieves custom claims from context by type.
 // Example handler usage:
 //
 //	func protectedHandler(w http.ResponseWriter, r *http.Request) {
-//		claims, ok := auth.GetClaims[CustomClaims](r.Context(), "api-access")
+//		claims, ok := auth.GetClaims[CustomClaims](r.Context())
 //		if !ok {
 //			http.Error(w, "Invalid claims", http.StatusUnauthorized)
 //			return
 //		}
-//		// Use claims.CustomField values...
+//		// Use claims.Role values...
 //	}
 //
 // # Example Application Setup
@@ -102,39 +95,40 @@
 // Typical middleware chain configuration:
 //
 //	router := http.NewServeMux()
-//	config := auth.NewConfigProvider()
+//	config := auth.NewConfigProvider() 
 //
 //	// Build processing chain
 //	chain := util.New(router).
-//	  WithAuth(auth.AuthMiddlewareOptions{
-//	    Config: config,
-//	    Purpose: "session",
-//	  }).
-//	  WithCORS(cors.Config{
-//	    AllowedOrigins: []string{"https://app.domain.com"},
-//	    AllowedHeaders: []string{"Authorization"},
-//	  }).
-//	  WithAccessControl(accessRules)
+//		WithAuth(auth.AuthMiddlewareOptions{
+//			Config: config,
+//			Purpose: "session",
+//		}).
+//		WithCORS(cors.Config{
+//			AllowedOrigins: []string{"https://app.domain.com"},
+//			AllowedHeaders: []string{"Authorization"},
+//		})
 //
 //	// Add Swagger documentation
+//	spec := loadOpenAPISpec() // Implement your spec loader
 //	swaggerHandler := swagger.NewHandler(specJSON, "/docs")
 //	router.Handle("/docs/", swaggerHandler)
 //
-//	http.ListenAndServe(":8080", chain)
+//	http.ListenAndServe(":8080", chain.Then())
 //
 // # Configuration Management
 //
 // Implement ConfigProvider to supply:
 // - ed25519.PrivateKey for JWT signing
-// - Domain names for token issuer validation
-// - Cookie security settings (SameSite, HttpOnly flags)
-// - API endpoint configurations for multi-domain deployments
+// - Domain name for token validation
+// - Cookie security settings
+// - API endpoint configurations
 //
 // # Security Architecture
 //
 // - JWT tokens signed with Ed25519 for performance and security
-// - Strict same-site cookie policies by default
-// - Audience claims validation for token purpose isolation
+// - Strict same-site cookie policies
+// - Type-safe custom claims handling
+// - Audience claim validation for token purpose isolation
 // - Contextual user ID injection with type safety
 // - Automatic token revocation detection
 // - HSTS-ready security headers

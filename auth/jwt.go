@@ -35,7 +35,7 @@ func createJWTToken(privateKey ed25519.PrivateKey, domain string, subject string
 // SendJWT creates and sets a JWT token in the HTTP response
 func SendJWT(w http.ResponseWriter, privateKey ed25519.PrivateKey, domain string,
 	cookieName string, subject string, purpose jwt.JWTPurpose, expiry time.Duration, 
-	opts ...ClaimModifier) (string, error) {
+	opts ...JWTOption) (string, error) {
 
 	token, err := CreateJWTToken(privateKey, domain, subject, purpose, expiry, opts...)
 	if err != nil {
@@ -73,7 +73,7 @@ type APIProvider interface {
 // Handles both setting and clearing authentication cookies.
 type CookieSetter interface {
 	SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, 
-		expiry time.Duration, opts ...ClaimModifier) (string, error)
+		expiry time.Duration, opts ...JWTOption) (string, error)
 	ClearJWTCookie(w http.ResponseWriter)
 }
 
@@ -86,7 +86,7 @@ type defaultCookieSetter struct {
 
 // SetJWTCookie sets a JWT token as a cookie
 func (s *defaultCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
-	purpose jwt.JWTPurpose, expiry time.Duration, opts ...ClaimModifier) (string, error) {
+	purpose jwt.JWTPurpose, expiry time.Duration, opts ...JWTOption) (string, error) {
 
 	return SendJWT(w, s.PrivateKey, s.Domain, s.CookieName, subject, purpose, expiry, opts...)
 }
@@ -129,7 +129,7 @@ var (
 
 // SetJWTCookie sets JWT cookies for all APIs
 func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose,
-	expiry time.Duration, opts ...ClaimModifier) (string, error) {
+	expiry time.Duration, opts ...JWTOption) (string, error) {
 
 	var lastToken string
 	var lastErr error
@@ -213,7 +213,7 @@ func NewMultiCookieSetter(config ConfigProvider, apis APIProvider) CookieSetter 
 // Uses Ed25519 for signing, sets standard claims (iss, sub, aud, exp, iat, nbf).
 // Returns the signed token string or error if signing fails.
 func CreateJWTToken(privateKey ed25519.PrivateKey, domain string, subject string, purpose jwt.JWTPurpose,
-	expiration time.Duration, opts ...ClaimModifier) (string, error) {
+	expiration time.Duration, opts ...JWTOption) (string, error) {
 	if privateKey == nil {
 		return "", errors.New("private key cannot be nil")
 	}
@@ -221,10 +221,17 @@ func CreateJWTToken(privateKey ed25519.PrivateKey, domain string, subject string
 	now := time.Now()
 	expirationTime := now.Add(expiration)
 
-	var claims gjwt.Claims
-	if factory, exists := customClaimTypes[string(purpose)]; exists {
-		claims = factory()
-		if rc, ok := claims.(interface {
+	// Process options
+	options := &jwtOptions{
+		claims:    &gjwt.RegisteredClaims{},
+		modifiers: []ClaimModifier{},
+	}
+	for _, opt := range opts {
+		opt.Apply(options)
+	}
+
+	claims := options.claims
+	if rc, ok := claims.(interface {
 			SetSubject(string)
 			SetExpiresAt(*gjwt.NumericDate)
 			SetIssuedAt(*gjwt.NumericDate)
@@ -240,24 +247,21 @@ func CreateJWTToken(privateKey ed25519.PrivateKey, domain string, subject string
 			if purpose != jwt.JWTPurposeNone {
 				rc.SetAudience([]string{string(purpose)})
 			}
+		} else if rc, ok := claims.(*gjwt.RegisteredClaims); ok {
+			rc.Subject = subject
+			rc.ExpiresAt = gjwt.NewNumericDate(expirationTime)
+			rc.IssuedAt = gjwt.NewNumericDate(now)
+			rc.NotBefore = gjwt.NewNumericDate(now)
+			rc.Issuer = domain
+			
+			if purpose != jwt.JWTPurposeNone {
+				rc.Audience = []string{string(purpose)}
+			}
 		}
-	} else {
-		claims = &gjwt.RegisteredClaims{
-			Subject:   subject,
-			ExpiresAt: gjwt.NewNumericDate(expirationTime),
-			IssuedAt:  gjwt.NewNumericDate(now),
-			NotBefore: gjwt.NewNumericDate(now),
-			Issuer:    domain,
-		}
-		// Type assert to set audience for RegisteredClaims
-		if rc, ok := claims.(*gjwt.RegisteredClaims); ok && purpose != jwt.JWTPurposeNone {
-			rc.Audience = []string{string(purpose)}
-		}
-	}
 
-	for _, opt := range opts {
-		opt(claims)
-	}
+		for _, modifier := range options.modifiers {
+			modifier(claims)
+		}
 
 	token := gjwt.NewWithClaims(gjwt.SigningMethodEdDSA, claims)
 	return token.SignedString(privateKey)

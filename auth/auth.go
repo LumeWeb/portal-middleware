@@ -3,14 +3,12 @@ package auth
 import (
 	"context"
 	"crypto/ed25519"
-	"errors"
 	gjwt "github.com/golang-jwt/jwt/v5"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
+	"go.lumeweb.com/portal-middleware/context"
 	"net/http"
 	"strconv"
 	"strings"
-
-	"go.lumeweb.com/portal-middleware/context"
 )
 
 // ParseAuthTokenHeader extracts a JWT token from the Authorization header.
@@ -68,7 +66,7 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 
 	findToken := func(r *http.Request) string {
 		return FindAuthToken(r, options.Config.GetPrivateKey(),
-			options.Config.GetAuthCookieName(), options.Config.GetAuthTokenName())
+			options.Config.GetDomain(), options.Config.GetAuthCookieName(), options.Config.GetAuthTokenName())
 	}
 
 	return func(next http.Handler) http.Handler {
@@ -90,9 +88,18 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 
 			// Get both base and custom claims
 			baseClaims, customClaims, err := validator.ValidateWithClaims(authToken, options.Purpose)
-			if err != nil && !(errors.Is(err, gjwt.ErrTokenExpired) && options.ExpiredAllowed) {
-				http.Error(w, err.Error(), http.StatusUnauthorized)
-				return
+			if err != nil {
+				// Handle expired token case when allowed
+				if options.ExpiredAllowed && err == gjwt.ErrTokenExpired {
+					// We still need to have baseClaims to proceed
+					if baseClaims == nil {
+						http.Error(w, "Invalid JWT", http.StatusUnauthorized)
+						return
+					}
+				} else {
+					http.Error(w, err.Error(), http.StatusUnauthorized)
+					return
+				}
 			}
 
 			// Build context with all claims
@@ -116,7 +123,7 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 	}
 }
 
-func FindAuthToken(r *http.Request, secretKey ed25519.PrivateKey, cookieName string, queryParam string) string {
+func FindAuthToken(r *http.Request, secretKey ed25519.PrivateKey, domain string, cookieName string, queryParam string) string {
 	// Check Authorization header first
 	if token := ParseAuthTokenHeader(r.Header); token != "" {
 		if IsValidJWT(token, secretKey) {
@@ -180,20 +187,13 @@ func (v *jwtValidator) Validate(token string, purpose jwt.JWTPurpose) (*gjwt.Reg
 	return claims, err
 }
 
-func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.JWTPurpose) (*gjwt.RegisteredClaims, map[string]interface{}, error) {
+func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.JWTPurpose) (*gjwt.RegisteredClaims, gjwt.Claims, error) {
 	domain := v.config.GetDomain()
 
-	// Check for custom claims type
-	factory, hasHandler := customClaimTypes[string(purpose)]
-	var customClaims gjwt.Claims
-	if hasHandler {
-		customClaims = factory()
-	} else {
-		customClaims = &gjwt.RegisteredClaims{}
-	}
+	// Default to RegisteredClaims
+	claims := &gjwt.RegisteredClaims{}
 
-	// Parse token with potential custom claims
-	tokenObj, err := gjwt.ParseWithClaims(token, customClaims, func(token *gjwt.Token) (interface{}, error) {
+	tokenObj, err := gjwt.ParseWithClaims(token, claims, func(token *gjwt.Token) (interface{}, error) {
 		return v.config.GetPrivateKey().Public(), nil
 	}, gjwt.WithValidMethods([]string{"EdDSA"}))
 
@@ -205,13 +205,8 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.JWTPurpose) 
 		return nil, nil, jwt.ErrJWTInvalid
 	}
 
-	// Verify standard claims
-	var baseClaims *gjwt.RegisteredClaims
-	if rc, ok := customClaims.(*gjwt.RegisteredClaims); ok {
-		baseClaims = rc
-	} else if embeder, ok := customClaims.(interface{ GetRegisteredClaims() *gjwt.RegisteredClaims }); ok {
-		baseClaims = embeder.GetRegisteredClaims()
-	} else {
+	baseClaims, ok := tokenObj.Claims.(*gjwt.RegisteredClaims)
+	if !ok {
 		return nil, nil, jwt.ErrJWTUnexpectedClaimsType
 	}
 
@@ -226,22 +221,7 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.JWTPurpose) 
 		return nil, nil, jwt.ErrJWTUnexpectedIssuer
 	}
 
-	// Store claims in unified wrapper
-	wrapper := &claimsWrapper{
-		Base:   baseClaims,
-		Custom: make(map[string]interface{}),
-	}
-
-	if hasHandler {
-		wrapper.Custom[string(purpose)] = customClaims
-	}
-
-	// Convert custom claims to generic map
-	customMap := make(map[string]interface{})
-	for k, v := range wrapper.Custom {
-		customMap[k] = v
-	}
-	return baseClaims, customMap, nil
+	return baseClaims, tokenObj.Claims, nil
 }
 
 func NewValidator(config ConfigProvider) TokenValidator {
@@ -263,32 +243,26 @@ type claimsContextKey struct{}
 // claimsWrapper contains both base and custom claims
 type claimsWrapper struct {
 	Base   *gjwt.RegisteredClaims
-	Custom map[string]interface{}
+	Custom gjwt.Claims
 }
 
-// GetClaims retrieves custom claims from context by purpose and type
-func GetClaims[T gjwt.Claims](ctx context.Context, purpose jwt.JWTPurpose) (T, bool) {
-	var zero T
-	wrapper, ok := ctx.Value(claimsContextKey{}).(*claimsWrapper)
+// GetClaims retrieves claims from context
+func GetClaims[T gjwt.Claims](ctx context.Context) (T, bool) {
+	val := ctx.Value(claimsContextKey{})
+	if val == nil {
+		var zero T
+		return zero, false
+	}
+
+	wrapper, ok := val.(*claimsWrapper)
 	if !ok {
+		var zero T
 		return zero, false
 	}
 
-	claim, exists := wrapper.Custom[string(purpose)]
-	if !exists {
-		return zero, false
-	}
-
-	tClaim, ok := claim.(T)
-	return tClaim, ok
+	claims, ok := wrapper.Custom.(T)
+	return claims, ok
 }
-
-// RegisterClaimsType registers a custom claims type for a specific JWT purpose
-func RegisterClaimsType(purpose string, factory func() gjwt.Claims) {
-	customClaimTypes[purpose] = factory
-}
-
-var customClaimTypes = make(map[string]func() gjwt.Claims)
 
 // JWTVerifyToken verifies a JWT token
 func JWTVerifyToken(tokenString string, domain string, privateKey ed25519.PrivateKey,
