@@ -2,12 +2,10 @@ package validation
 
 import (
 	"encoding/json"
-	"fmt"
 	gjwt "github.com/golang-jwt/jwt/v5"
 	"go.lumeweb.com/portal-middleware/auth/adapter"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"reflect"
-	"strings"
 )
 
 func NewValidator(config adapter.ConfigProvider, opts ...jwt.Option) TokenValidator {
@@ -85,14 +83,13 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.Purpose) (*g
 		// Create new instance of expected type
 		customClaims = reflect.New(expectedClaimsType).Interface().(gjwt.Claims)
 
-		// Validate raw claims can be mapped to expected type
-		if err := validateClaimsStructure(rawClaims, customClaims); err != nil {
-			return nil, nil, jwt.ErrJWTUnexpectedClaimsType
+		// Validate and map claims using shared validation logic
+		if err := jwt.ValidateClaimsStructure(rawClaims, customClaims); err != nil {
+			return nil, nil, err
 		}
 
-		// Map the validated claims
-		if err := mapClaimsToStruct(rawClaims, customClaims); err != nil {
-			return nil, nil, jwt.ErrJWTUnexpectedClaimsType
+		if err := jwt.MapClaims(rawClaims, customClaims); err != nil {
+			return nil, nil, err
 		}
 	}
 
@@ -152,47 +149,6 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.Purpose) (*g
 	}
 	return baseClaims, tokenObj.Claims, nil
 }
-
-func validateClaimsStructure(rawClaims gjwt.MapClaims, expected gjwt.Claims) error {
-	// Get JSON tags from expected struct
-	expectedType := reflect.TypeOf(expected).Elem()
-	expectedFields := make(map[string]bool)
-
-	for i := 0; i < expectedType.NumField(); i++ {
-		field := expectedType.Field(i)
-		jsonTag := field.Tag.Get("json")
-		if jsonTag != "" && jsonTag != "-" {
-			// Handle comma-separated tags
-			if commaIdx := strings.Index(jsonTag, ","); commaIdx != -1 {
-				jsonTag = jsonTag[:commaIdx]
-			}
-			expectedFields[jsonTag] = true
-		}
-	}
-
-	// Check all non-standard claims in JWT exist in expected struct
-	for claim := range rawClaims {
-		switch claim {
-		case "iss", "sub", "aud", "exp", "nbf", "iat", "jti":
-			continue // Skip standard claims
-		default:
-			if !expectedFields[claim] {
-				return fmt.Errorf("unexpected claim field: %s", claim)
-			}
-		}
-	}
-
-	return nil
-}
-
-func mapClaimsToStruct(rawClaims gjwt.MapClaims, target gjwt.Claims) error {
-	data, err := json.Marshal(rawClaims)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, target)
-}
-
 func mapStandardClaims(rawClaims gjwt.MapClaims, target *gjwt.RegisteredClaims) error {
 	data, err := json.Marshal(rawClaims)
 	if err != nil {

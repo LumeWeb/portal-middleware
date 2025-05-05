@@ -196,6 +196,7 @@ func Options(opts ...Option) []Option {
 	return opts
 }
 
+// PurposeEqual checks if the given audience contains the specified purpose
 func PurposeEqual(aud gjwt.ClaimStrings, purpose Purpose) bool {
 	for _, a := range aud {
 		if a == string(purpose) {
