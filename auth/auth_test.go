@@ -57,7 +57,7 @@ func TestIsValidJWT(t *testing.T) {
 func TestAuthMiddleware(t *testing.T) {
 	mockConfig := authmocks.NewMockConfigProvider(t)
 	mockValidator := authmocks.NewMockTokenValidator(t)
-	
+
 	// Setup mock config to return a valid private key
 	_, privKey, _ := ed25519.GenerateKey(nil)
 	mockConfig.On("GetPrivateKey").Return(privKey)
@@ -95,7 +95,7 @@ func TestAuthMiddleware(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
-			Purpose:        jwt.JWTPurposeLogin, 
+			Purpose:        jwt.JWTPurposeLogin,
 			ExpiredAllowed: true,
 		})
 
@@ -136,7 +136,12 @@ func TestAuthMiddleware(t *testing.T) {
 		})
 		defer delete(customClaimTypes, "test_purpose")
 
-		tokenString, err := CreateJWTToken(privKey, "test.com", "user123", jwt.JWTPurpose("test_purpose"), time.Hour)
+		tokenString, err := CreateJWTToken(privKey, "test.com", "user123",
+			jwt.JWTPurpose("test_purpose"), time.Hour, ClaimModifier(func(claims gjwt.Claims) {
+				if cc, ok := claims.(*customClaims); ok {
+					cc.CustomField = "test_value"
+				}
+			}))
 		require.NoError(t, err)
 
 		req := httptest.NewRequest("GET", "/", nil)

@@ -38,6 +38,9 @@ type AccessChecker interface {
 	CheckAccess(userID uint, host string, path string, method string) (bool, error)
 }
 
+// ClaimModifier defines a function type for modifying JWT claims
+type ClaimModifier func(claims gjwt.Claims)
+
 // Auth token constants
 const (
 	AUTH_COOKIE_NAME = "auth_token"

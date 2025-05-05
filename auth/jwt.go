@@ -34,9 +34,10 @@ func createJWTToken(privateKey ed25519.PrivateKey, domain string, subject string
 
 // SendJWT creates and sets a JWT token in the HTTP response
 func SendJWT(w http.ResponseWriter, privateKey ed25519.PrivateKey, domain string,
-	cookieName string, subject string, purpose jwt.JWTPurpose, expiry time.Duration) (string, error) {
+	cookieName string, subject string, purpose jwt.JWTPurpose, expiry time.Duration, 
+	opts ...ClaimModifier) (string, error) {
 
-	token, err := CreateJWTToken(privateKey, domain, subject, purpose, expiry)
+	token, err := CreateJWTToken(privateKey, domain, subject, purpose, expiry, opts...)
 	if err != nil {
 		return "", err
 	}
@@ -71,7 +72,8 @@ type APIProvider interface {
 // CookieSetter manages JWT cookies across multiple domains and APIs.
 // Handles both setting and clearing authentication cookies.
 type CookieSetter interface {
-	SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, expiry time.Duration) (string, error)
+	SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, 
+		expiry time.Duration, opts ...ClaimModifier) (string, error)
 	ClearJWTCookie(w http.ResponseWriter)
 }
 
@@ -83,10 +85,10 @@ type defaultCookieSetter struct {
 }
 
 // SetJWTCookie sets a JWT token as a cookie
-func (s *defaultCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose,
-	expiry time.Duration) (string, error) {
+func (s *defaultCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
+	purpose jwt.JWTPurpose, expiry time.Duration, opts ...ClaimModifier) (string, error) {
 
-	return SendJWT(w, s.PrivateKey, s.Domain, s.CookieName, subject, purpose, expiry)
+	return SendJWT(w, s.PrivateKey, s.Domain, s.CookieName, subject, purpose, expiry, opts...)
 }
 
 // ClearJWTCookie clears the JWT cookie
@@ -127,7 +129,7 @@ var (
 
 // SetJWTCookie sets JWT cookies for all APIs
 func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose,
-	expiry time.Duration) (string, error) {
+	expiry time.Duration, opts ...ClaimModifier) (string, error) {
 
 	var lastToken string
 	var lastErr error
@@ -141,6 +143,7 @@ func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
 		subject,
 		purpose,
 		expiry,
+		opts...,
 	)
 
 	// Set cookies for all APIs
@@ -154,6 +157,7 @@ func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
 			subject,
 			purpose,
 			expiry,
+			opts...,
 		)
 
 		if err == nil && lastErr != nil {
@@ -209,7 +213,7 @@ func NewMultiCookieSetter(config ConfigProvider, apis APIProvider) CookieSetter 
 // Uses Ed25519 for signing, sets standard claims (iss, sub, aud, exp, iat, nbf).
 // Returns the signed token string or error if signing fails.
 func CreateJWTToken(privateKey ed25519.PrivateKey, domain string, subject string, purpose jwt.JWTPurpose,
-	expiration time.Duration) (string, error) {
+	expiration time.Duration, opts ...ClaimModifier) (string, error) {
 	if privateKey == nil {
 		return "", errors.New("private key cannot be nil")
 	}
@@ -217,16 +221,42 @@ func CreateJWTToken(privateKey ed25519.PrivateKey, domain string, subject string
 	now := time.Now()
 	expirationTime := now.Add(expiration)
 
-	claims := &gjwt.RegisteredClaims{
-		Subject:   subject,
-		ExpiresAt: gjwt.NewNumericDate(expirationTime),
-		IssuedAt:  gjwt.NewNumericDate(now),
-		NotBefore: gjwt.NewNumericDate(now),
-		Issuer:    domain,
+	var claims gjwt.Claims
+	if factory, exists := customClaimTypes[string(purpose)]; exists {
+		claims = factory()
+		if rc, ok := claims.(interface {
+			SetSubject(string)
+			SetExpiresAt(*gjwt.NumericDate)
+			SetIssuedAt(*gjwt.NumericDate)
+			SetNotBefore(*gjwt.NumericDate)
+			SetIssuer(string)
+			SetAudience([]string)
+		}); ok {
+			rc.SetSubject(subject)
+			rc.SetExpiresAt(gjwt.NewNumericDate(expirationTime))
+			rc.SetIssuedAt(gjwt.NewNumericDate(now))
+			rc.SetNotBefore(gjwt.NewNumericDate(now))
+			rc.SetIssuer(domain)
+			if purpose != jwt.JWTPurposeNone {
+				rc.SetAudience([]string{string(purpose)})
+			}
+		}
+	} else {
+		claims = &gjwt.RegisteredClaims{
+			Subject:   subject,
+			ExpiresAt: gjwt.NewNumericDate(expirationTime),
+			IssuedAt:  gjwt.NewNumericDate(now),
+			NotBefore: gjwt.NewNumericDate(now),
+			Issuer:    domain,
+		}
+		// Type assert to set audience for RegisteredClaims
+		if rc, ok := claims.(*gjwt.RegisteredClaims); ok && purpose != jwt.JWTPurposeNone {
+			rc.Audience = []string{string(purpose)}
+		}
 	}
 
-	if purpose != jwt.JWTPurposeNone {
-		claims.Audience = []string{string(purpose)}
+	for _, opt := range opts {
+		opt(claims)
 	}
 
 	token := gjwt.NewWithClaims(gjwt.SigningMethodEdDSA, claims)

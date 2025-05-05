@@ -43,8 +43,8 @@ func NewAPIProvider() auth.APIProvider {
 }
 
 // SetJWTCookie sets a JWT token as a cookie using ConfigProvider
-func (s *coreCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose,
-	expiry time.Duration) (string, error) {
+func (s *coreCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
+	purpose jwt.JWTPurpose, expiry time.Duration, opts ...auth.ClaimModifier) (string, error) {
 
 	tokenString, err := auth.CreateJWTToken(
 		s.config.GetPrivateKey(),
@@ -52,6 +52,7 @@ func (s *coreCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, p
 		subject,
 		purpose,
 		expiry,
+		opts...,
 	)
 	if err != nil {
 		return "", err
@@ -115,7 +116,8 @@ func newDomainCookieSetter(base auth.CookieSetter, domain string) *domainCookieS
 	}
 }
 
-func (d *domainCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, expiry time.Duration) (string, error) {
+func (d *domainCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, 
+	expiry time.Duration, opts ...auth.ClaimModifier) (string, error) {
 	// Get config from base but override domain
 	config := d.base.(*coreCookieSetter).config
 
@@ -125,6 +127,7 @@ func (d *domainCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string,
 		subject,
 		purpose,
 		expiry,
+		opts...,
 	)
 	if err != nil {
 		return "", err
@@ -172,11 +175,11 @@ type chainedCookieSetter struct {
 	setters []auth.CookieSetter
 }
 
-func (c *chainedCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, expiry time.Duration) (string, error) {
+func (c *chainedCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, expiry time.Duration, opts ...auth.ClaimModifier) (string, error) {
 	var token string
 	var err error
 	for _, setter := range c.setters {
-		token, err = setter.SetJWTCookie(w, subject, purpose, expiry)
+		token, err = setter.SetJWTCookie(w, subject, purpose, expiry, opts...)
 		if err != nil {
 			return "", err
 		}

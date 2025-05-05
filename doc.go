@@ -66,15 +66,36 @@
 //
 //	auth.RegisterClaimsType("api-access", func() gjwt.Claims { return &CustomClaims{} })
 //
+// Create token with custom claims:
+//
+//	token, err := auth.CreateJWTToken(privateKey, "domain.com", "user123", 
+//		auth.JWTPurposeLogin, time.Hour,
+//		func(claims gjwt.Claims) {
+//			if cc, ok := claims.(*CustomClaims); ok {
+//				cc.Role = "admin"
+//			}
+//		})
+//
 // Retrieve in handler:
 //
 //	claims, ok := auth.GetClaims[CustomClaims](ctx, "api-access")
+//	if ok {
+//		log.Printf("User role: %s", claims.Role)
+//	}
 //
 // # GetClaims Function
 //
-// GetClaims retrieves custom claims from context by purpose and type
-// Example:
-// claims, ok := GetClaims[CustomClaims](ctx, "api-access")
+// GetClaims retrieves custom claims from context by purpose and type.
+// Example handler usage:
+//
+//	func protectedHandler(w http.ResponseWriter, r *http.Request) {
+//		claims, ok := auth.GetClaims[CustomClaims](r.Context(), "api-access")
+//		if !ok {
+//			http.Error(w, "Invalid claims", http.StatusUnauthorized)
+//			return
+//		}
+//		// Use claims.CustomField values...
+//	}
 //
 // # Example Application Setup
 //
