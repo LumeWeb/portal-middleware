@@ -1,7 +1,8 @@
-package auth
+package middleware
 
 import (
 	"context"
+	"go.lumeweb.com/portal-middleware/auth"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -12,7 +13,7 @@ import (
 )
 
 func TestAccessMiddleware(t *testing.T) {
-	mockUserChecker := NewMockUserChecker(t)
+	mockUserChecker := auth.NewMockUserChecker(t)
 	mockAccessChecker := coreMocks.NewMockAccessService(t)
 	middleware := AccessMiddleware(mockUserChecker, mockAccessChecker)
 

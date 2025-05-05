@@ -1,22 +1,29 @@
-with-expecter: true
 packages:
   go.lumeweb.com/portal-middleware/auth:
+    config:
+      dir: "{{.InterfaceDir}}"
+      structname: "{{.Mock}}{{.InterfaceName}}"
+      outpkg: "{{.PackageName}}"
     interfaces:
       UserChecker:
-        config:
-          filename: "user_checker_mock.go"
+      AccessChecker:
+  go.lumeweb.com/portal-middleware/auth/validation:
+    config:
+      dir: "{{.InterfaceDir}}"
+      structname: "{{.Mock}}{{.InterfaceName}}"
+      outpkg: "{{.PackageName}}"
+    interfaces:
       TokenValidator:
-        config:
-          filename: "token_validator_mock.go"
-      ConfigProvider:
-        config:
-          filename: "config_provider_mock.go"
-      APIProvider:
-        config:
-          filename: "api_provider_mock.go"
+  go.lumeweb.com/portal-middleware/auth/adapter:
+    config:
+      dir: "{{.InterfaceDir}}"
+      structname: "{{.Mock}}{{.InterfaceName}}"
+      outpkg: "{{.PackageName}}"
+    interfaces:
       CookieSetter:
-        config:
-          filename: "cookie_setter_mock.go"
+      APIProvider:
+      ConfigProvider:
+with-expecter: true
 disable-version-string: true
 issue-845-fix: true
 resolve-type-alias: false

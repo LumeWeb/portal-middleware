@@ -19,7 +19,7 @@
 //   - Cookie-based session management with automatic refresh
 //   - Integration with ConfigProvider for security settings
 //   - Example:
-//     authMiddleware := auth.AuthMiddleware(auth.AuthMiddlewareOptions{
+//     authMiddleware := middleware.AuthMiddleware(middleware.AuthMiddlewareOptions{
 //         Config: config,       // Required
 //         Purpose: "api-access",// Required
 //         ExpiredAllowed: false,
@@ -30,7 +30,7 @@
 //   - Resource path pattern matching
 //   - Integration with user directory services
 //   - Example:
-//     accessMiddleware := auth.AccessMiddleware(userChecker, accessChecker)
+//     accessMiddleware := middleware.AccessMiddleware(userChecker, accessChecker)
 //
 // 3. Security Utilities:
 //   - CORS with safe defaults and custom rules
@@ -47,7 +47,19 @@
 //   - Email verification workflows
 //   - Account status checks
 //   - Example:
-//     verifiedMiddleware := middleware.AccountVerifiedMiddleware(ctx)
+//     verifiedMiddleware := middleware.AccountVerifiedMiddleware(userChecker)
+//
+// # Package Structure
+//
+// - /auth: Core authentication types and interfaces
+// - /auth/adapter: Adapters for core services
+// - /auth/jwt: JWT token handling utilities
+// - /auth/middleware: HTTP middleware implementations
+// - /auth/validation: Token validation logic
+// - /cors: CORS middleware
+// - /swagger: OpenAPI documentation support
+// - /tus: File upload protocol support
+// - /util: Helper utilities
 //
 // # Custom Claims Example
 //
@@ -60,10 +72,10 @@
 //
 // Create token with custom claims:
 //
-//	token, err := auth.CreateJWTToken(privateKey, "domain.com", "user123", 
-//		jwt.JWTPurposeLogin, time.Hour,
-//		auth.WithClaims(&CustomClaims{}),
-//		auth.WithModifiers(func(claims gjwt.Claims) {
+//	token, err := jwt.CreateToken(privateKey, "domain.com", "user123", 
+//		jwt.PurposeLogin, time.Hour,
+//		jwt.WithClaims(&CustomClaims{}),
+//		jwt.WithModifiers(func(claims gjwt.Claims) {
 //			if cc, ok := claims.(*CustomClaims); ok {
 //				cc.Role = "admin"
 //			}
@@ -76,30 +88,16 @@
 //		log.Printf("User role: %s", claims.Role)
 //	}
 //
-// # GetClaims Function
-//
-// GetClaims retrieves custom claims from context by type.
-// Example handler usage:
-//
-//	func protectedHandler(w http.ResponseWriter, r *http.Request) {
-//		claims, ok := auth.GetClaims[CustomClaims](r.Context())
-//		if !ok {
-//			http.Error(w, "Invalid claims", http.StatusUnauthorized)
-//			return
-//		}
-//		// Use claims.Role values...
-//	}
-//
 // # Example Application Setup
 //
 // Typical middleware chain configuration:
 //
 //	router := http.NewServeMux()
-//	config := auth.NewConfigProvider() 
+//	config := adapter.NewFromCore(coreCtx) 
 //
 //	// Build processing chain
 //	chain := util.New(router).
-//		WithAuth(auth.AuthMiddlewareOptions{
+//		WithAuth(middleware.AuthMiddlewareOptions{
 //			Config: config,
 //			Purpose: "session",
 //		}).
@@ -110,18 +108,10 @@
 //
 //	// Add Swagger documentation
 //	spec := loadOpenAPISpec() // Implement your spec loader
-//	swaggerHandler := swagger.NewHandler(specJSON, "/docs")
+//	swaggerHandler := swagger.NewHandler(spec, "/docs")
 //	router.Handle("/docs/", swaggerHandler)
 //
 //	http.ListenAndServe(":8080", chain.Then())
-//
-// # Configuration Management
-//
-// Implement ConfigProvider to supply:
-// - ed25519.PrivateKey for JWT signing
-// - Domain name for token validation
-// - Cookie security settings
-// - API endpoint configurations
 //
 // # Security Architecture
 //

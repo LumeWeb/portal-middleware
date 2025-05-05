@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal/core"
 )
 
@@ -16,13 +15,17 @@ type coreAPIProvider struct {
 
 // coreCookieSetter adapts a ConfigProvider to implement auth.CookieSetter
 type coreCookieSetter struct {
-	config auth.ConfigProvider
+	config ConfigProvider
+}
+
+// APIProvider defines an interface for getting a list of APIs
+type APIProvider interface {
+	GetAPIs() []string
 }
 
 // Type assertions to ensure interfaces are implemented correctly
 var (
-	_ auth.APIProvider  = (*coreAPIProvider)(nil)
-	_ auth.CookieSetter = (*coreCookieSetter)(nil)
+	_ APIProvider = (*coreAPIProvider)(nil)
 )
 
 // GetAPIs returns the stored API domains
@@ -31,7 +34,7 @@ func (p *coreAPIProvider) GetAPIs() []string {
 }
 
 // NewAPIProvider creates a new APIProvider using core.GetAPIs
-func NewAPIProvider() auth.APIProvider {
+func NewAPIProvider() APIProvider {
 	apiList := core.GetAPIList()
 	domains := make([]string, 0, len(apiList))
 
@@ -42,86 +45,39 @@ func NewAPIProvider() auth.APIProvider {
 	return &coreAPIProvider{apis: domains}
 }
 
-// SetJWTCookie sets a JWT token as a cookie using ConfigProvider
-func (s *coreCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose,
-	expiry time.Duration, opts ...auth.JWTOption) (string, error) {
-
-	tokenString, err := auth.CreateJWTToken(
-		s.config.GetPrivateKey(),
-		s.config.GetDomain(),
-		subject,
-		purpose,
-		expiry,
-		opts...,
-	)
-	if err != nil {
-		return "", err
-	}
-
-	// Set cookie with explicit domain
-	cookie := &http.Cookie{
-		Name:     s.config.GetAuthCookieName(),
-		Value:    tokenString,
-		Domain:   s.config.GetDomain(),
-		Path:     "/",
-		Expires:  time.Now().Add(expiry),
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	}
-	http.SetCookie(w, cookie)
-
-	return tokenString, nil
-}
-
-// ClearJWTCookie clears the JWT cookie
-func (s *coreCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
-	cookie := &http.Cookie{
-		Name:     s.config.GetAuthCookieName(),
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	}
-
-	http.SetCookie(w, cookie)
-}
-
 // MultiCoreSetterFromCore creates a chained cookie setter that handles both main domain and API subdomains
-func MultiCoreSetterFromCore(ctx core.Context) auth.CookieSetter {
+func MultiCoreSetterFromCore(ctx core.Context) CookieSetter {
 	mainSetter := NewCookieSetter(NewFromCore(ctx))
 
 	// Create API setters with explicit domain handling
-	var apiSetters []auth.CookieSetter
+	var apiSetters []CookieSetter
 	for _, domain := range NewAPIProvider().GetAPIs() {
 		apiSetters = append(apiSetters, newDomainCookieSetter(mainSetter, domain))
 	}
 
-	return NewChainedCookieSetter(append([]auth.CookieSetter{mainSetter}, apiSetters...)...)
+	return NewChainedCookieSetter(append([]CookieSetter{mainSetter}, apiSetters...)...)
 }
 
 // domainCookieSetter sets cookies for a specific domain
 type domainCookieSetter struct {
-	base   auth.CookieSetter
+	base   CookieSetter
 	domain string
 }
 
 // newDomainCookieSetter creates a new domainCookieSetter instance
-func newDomainCookieSetter(base auth.CookieSetter, domain string) *domainCookieSetter {
+func newDomainCookieSetter(base CookieSetter, domain string) *domainCookieSetter {
 	return &domainCookieSetter{
 		base:   base,
 		domain: domain,
 	}
 }
 
-func (d *domainCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose,
-	expiry time.Duration, opts ...auth.JWTOption) (string, error) {
+func (d *domainCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.Purpose,
+	expiry time.Duration, opts ...jwt.Option) (string, error) {
 	// Get config from base but override domain
 	config := d.base.(*coreCookieSetter).config
 
-	tokenString, err := auth.CreateJWTToken(
+	tokenString, err := jwt.CreateToken(
 		config.GetPrivateKey(),
 		d.domain, // Use the API domain as issuer
 		subject,
@@ -167,15 +123,15 @@ func (d *domainCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 }
 
 // NewChainedCookieSetter creates a CookieSetter that chains multiple setters
-func NewChainedCookieSetter(setters ...auth.CookieSetter) auth.CookieSetter {
+func NewChainedCookieSetter(setters ...CookieSetter) CookieSetter {
 	return &chainedCookieSetter{setters: setters}
 }
 
 type chainedCookieSetter struct {
-	setters []auth.CookieSetter
+	setters []CookieSetter
 }
 
-func (c *chainedCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.JWTPurpose, expiry time.Duration, opts ...auth.JWTOption) (string, error) {
+func (c *chainedCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.Purpose, expiry time.Duration, opts ...jwt.Option) (string, error) {
 	var token string
 	var err error
 	for _, setter := range c.setters {
@@ -190,12 +146,5 @@ func (c *chainedCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string
 func (c *chainedCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 	for _, setter := range c.setters {
 		setter.ClearJWTCookie(w)
-	}
-}
-
-// NewCookieSetter creates a new coreCookieSetter from a ConfigProvider
-func NewCookieSetter(config auth.ConfigProvider) auth.CookieSetter {
-	return &coreCookieSetter{
-		config: config,
 	}
 }

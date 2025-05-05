@@ -1,0 +1,115 @@
+package middleware
+
+import (
+	"context"
+	"errors"
+	gjwt "github.com/golang-jwt/jwt/v5"
+	"go.lumeweb.com/portal-middleware/auth"
+	"go.lumeweb.com/portal-middleware/auth/adapter"
+	"go.lumeweb.com/portal-middleware/auth/jwt"
+	"go.lumeweb.com/portal-middleware/auth/validation"
+	mcontext "go.lumeweb.com/portal-middleware/context"
+	"net/http"
+	"reflect"
+	"strconv"
+)
+
+// AuthMiddlewareOptions configures the authentication middleware behavior.
+// Contains settings for token validation, purpose restrictions, and error handling.
+// This struct is defined in auth/types.go to avoid duplication
+type AuthMiddlewareOptions struct {
+	Config         adapter.ConfigProvider
+	Validator      validation.TokenValidator
+	Purpose        jwt.Purpose
+	EmptyAllowed   bool
+	ExpiredAllowed bool
+	Options        []jwt.Option // Use JWT options from subpackage
+}
+
+// AuthMiddleware creates HTTP middleware for JWT authentication
+// Validates tokens and injects user context if valid
+// Returns a handler that can be chained with other middleware
+func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handler {
+	if options.Config == nil {
+		panic("AuthMiddleware requires a ConfigProvider")
+	}
+	if options.Purpose == "" {
+		panic("AuthMiddleware requires a Purpose")
+	}
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			authToken := auth.ParseAuthToken(r)
+			if authToken == "" {
+				if !options.EmptyAllowed {
+					http.Error(w, "Missing token", http.StatusUnauthorized)
+					return
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			validator := options.Validator
+			if validator == nil {
+				validator = validation.NewValidator(options.Config, options.Options...)
+			}
+
+			// Get both base and custom claims
+			baseClaims, customClaims, err := validator.ValidateWithClaims(authToken, options.Purpose)
+			if err != nil {
+				// Handle expired tokens when allowed
+				if options.ExpiredAllowed && errors.Is(err, gjwt.ErrTokenExpired) {
+					// We still need baseClaims to proceed
+					if baseClaims == nil {
+						http.Error(w, "Invalid token", http.StatusUnauthorized)
+						return
+					}
+				} else {
+					http.Error(w, "Invalid token", http.StatusUnauthorized)
+					return
+				}
+			}
+
+			// Build context with all claims
+			ctx := r.Context()
+			if baseClaims != nil {
+				userID, _ := strconv.ParseUint(baseClaims.Subject, 10, 64)
+				ctx = context.WithValue(ctx, mcontext.UserIDKey, uint(userID))
+				ctx = context.WithValue(ctx, mcontext.AuthTokenKey, authToken)
+
+				// Only store custom claims if they match the expected type
+				if customClaims != nil {
+					var expectedClaimsType reflect.Type
+					for _, opt := range options.Options {
+						if claimOpt, ok := opt.(jwt.WithClaimsOpt); ok {
+							expectedClaimsType = reflect.TypeOf(claimOpt.Claims()).Elem()
+							break
+						}
+					}
+
+					if expectedClaimsType != nil {
+						actualType := reflect.TypeOf(customClaims)
+						expectedPtrType := reflect.PtrTo(expectedClaimsType)
+
+						// Check if types match directly or via pointer
+						if !actualType.AssignableTo(expectedClaimsType) &&
+							!actualType.AssignableTo(expectedPtrType) {
+							http.Error(w, "Invalid token claims", http.StatusUnauthorized)
+							return
+						}
+					}
+					// Store claims in context
+					wrapper := auth.NewClaimsWrapper(baseClaims, customClaims)
+					ctx = context.WithValue(ctx, auth.ClaimsContextKey{}, wrapper)
+				} else {
+					// Store just base claims if no custom claims
+					wrapper := auth.NewClaimsWrapper(baseClaims, nil)
+					ctx = context.WithValue(ctx, auth.ClaimsContextKey{}, wrapper)
+				}
+			}
+
+			r = r.WithContext(ctx)
+			next.ServeHTTP(w, r)
+		})
+	}
+}

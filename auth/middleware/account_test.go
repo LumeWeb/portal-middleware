@@ -1,7 +1,8 @@
-package auth
+package middleware
 
 import (
 	"context"
+	"go.lumeweb.com/portal-middleware/auth"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestAccountVerifiedMiddleware(t *testing.T) {
-	mockChecker := NewMockUserChecker(t)
+	mockChecker := auth.NewMockUserChecker(t)
 	middleware := AccountVerified(mockChecker)
 
 	t.Run("verified user", func(t *testing.T) {

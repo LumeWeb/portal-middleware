@@ -1,6 +1,7 @@
-package auth
+package middleware
 
 import (
+	"go.lumeweb.com/portal-middleware/auth"
 	"net/http"
 
 	"go.lumeweb.com/portal-middleware/context"
@@ -10,7 +11,7 @@ import (
 // Checks the verification status of the user in the request context.
 // Returns 403 Forbidden if account is not verified, 500 for verification errors.
 // Must be used after AuthMiddleware to ensure user context exists.
-func AccountVerified(checker UserChecker) func(http.Handler) http.Handler {
+func AccountVerified(checker auth.UserChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID, err := mcontext.GetUserID(r.Context())

@@ -2,9 +2,18 @@ package adapter
 
 import (
 	"crypto/ed25519"
-	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal/core"
 )
+
+// ConfigProvider defines an interface for accessing configuration needed by auth middleware
+// ConfigProvider defines the configuration requirements for authentication services.
+// Implementations should provide cryptographic keys and operational settings.
+type ConfigProvider interface {
+	GetPrivateKey() ed25519.PrivateKey
+	GetDomain() string
+	GetAuthCookieName() string
+	GetAuthTokenName() string
+}
 
 // coreConfigProvider bridges the core framework's context with the auth package's ConfigProvider interface.
 // This allows the auth middleware to access configuration values from the core system.
@@ -13,7 +22,7 @@ type coreConfigProvider struct {
 }
 
 // Compile-time interface implementation check
-var _ auth.ConfigProvider = (*coreConfigProvider)(nil)
+var _ ConfigProvider = (*coreConfigProvider)(nil)
 
 // NewFromCore creates a ConfigProvider that sources configuration from the core framework context.
 // This is the primary integration point between the core framework and auth package.
@@ -21,7 +30,7 @@ var _ auth.ConfigProvider = (*coreConfigProvider)(nil)
 //
 //	coreCtx := core.GetContext()
 //	authConfig := adapter.NewFromCore(coreCtx)
-func NewFromCore(ctx core.Context) auth.ConfigProvider {
+func NewFromCore(ctx core.Context) ConfigProvider {
 	return &coreConfigProvider{ctx: ctx}
 }
 

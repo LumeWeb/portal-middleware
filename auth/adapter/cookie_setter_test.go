@@ -3,48 +3,21 @@ package adapter
 import (
 	"crypto/ed25519"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
-	"go.sia.tech/coreutils/wallet"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.lumeweb.com/portal/core"
-	coreTesting "go.lumeweb.com/portal/core/testing"
-	coreMocks "go.lumeweb.com/portal/core/testing/mocks"
 )
 
-func TestCoreAPIProvider_GetAPIs(t *testing.T) {
-
-	// Create mock APIs
-	mockAPI1 := coreMocks.NewMockAPI(t)
-	mockAPI1.On("Name").Return("api1").Maybe()
-	mockAPI1.On("Subdomain").Return("api1.example.com").Maybe()
-	mockAPI2 := coreMocks.NewMockAPI(t)
-	mockAPI2.On("Name").Return("api2").Maybe()
-	mockAPI2.On("Subdomain").Return("api2.example.com").Maybe()
-
-	// Register test APIs
-	core.RegisterAPI("api1", mockAPI1)
-	core.RegisterAPI("api2", mockAPI2)
-
-	// Reset API registry after test
-	t.Cleanup(core.ResetState)
-
-	provider := NewAPIProvider()
-	apis := provider.GetAPIs()
-
-	assert.ElementsMatch(t, []string{"api1.example.com", "api2.example.com"}, apis, "Should return all API domains")
-}
-
-func TestCoreCookieSetter(t *testing.T) {
-
+func TestCookieSetter(t *testing.T) {
 	mockConfig := NewMockConfigProvider(t)
 	_, privKey, _ := ed25519.GenerateKey(nil)
 
+	// Setup mock expectations
 	mockConfig.On("GetPrivateKey").Return(privKey)
-	mockConfig.On("GetDomain").Return("example.com")
+	mockConfig.On("GetDomain").Return("test.com")
 	mockConfig.On("GetAuthCookieName").Return("auth_token")
 
 	setter := NewCookieSetter(mockConfig)
@@ -79,29 +52,19 @@ func TestCoreCookieSetter(t *testing.T) {
 	})
 }
 
-func TestMultiCoreSetterFromCore(t *testing.T) {
-	// Setup test context with mock config
-	ctx := coreTesting.NewTestContext(t)
+func TestMultiCookieSetter(t *testing.T) {
+	mockConfig := NewMockConfigProvider(t)
+	mockAPIProvider := NewMockAPIProvider(t)
 
-	// Configure core context with test values
-	cfg := ctx.Config().Config()
-	cfg.Core.Domain = "main.example.com"
-	seedPhrase := wallet.NewSeedPhrase()
-	err := cfg.Core.Identity.DecodeMapstructure(seedPhrase)
-	if err != nil {
-		t.Error(err)
-	}
-	// Create test APIs for multi-domain test
-	mockAPI1 := coreMocks.NewMockAPI(t)
-	mockAPI1.On("Name").Return("api1.example.com").Maybe()
-	mockAPI1.On("Subdomain").Return("api1.example.com").Maybe()
-	mockAPI2 := coreMocks.NewMockAPI(t)
-	mockAPI2.On("Name").Return("api2.example.com").Maybe()
-	mockAPI2.On("Subdomain").Return("api2.example.com").Maybe()
-	core.RegisterAPI("api1", mockAPI1)
-	core.RegisterAPI("api2", mockAPI2)
+	_, privKey, _ := ed25519.GenerateKey(nil)
 
-	setter := MultiCoreSetterFromCore(ctx)
+	// Setup mock expectations
+	mockConfig.On("GetPrivateKey").Return(privKey)
+	mockConfig.On("GetDomain").Return("test.com")
+	mockConfig.On("GetAuthCookieName").Return("auth_token")
+	mockAPIProvider.On("GetAPIs").Return([]string{"api1.test.com", "api2.test.com"})
+
+	setter := NewMultiCookieSetter(mockConfig, mockAPIProvider)
 
 	t.Run("Sets cookies for all domains", func(t *testing.T) {
 		w := httptest.NewRecorder()
@@ -115,14 +78,14 @@ func TestMultiCoreSetterFromCore(t *testing.T) {
 
 		// Verify main domain cookie
 		mainCookie := cookies[0]
-		assert.Equal(t, "main.example.com", mainCookie.Domain)
+		assert.Equal(t, "test.com", mainCookie.Domain)
 		assert.Equal(t, "auth_token", mainCookie.Name)
 
 		// Verify API subdomain cookies
 		api1Cookie := cookies[1]
-		assert.Equal(t, "api1.example.com", api1Cookie.Domain)
+		assert.Equal(t, "api1.test.com", api1Cookie.Domain)
 		api2Cookie := cookies[2]
-		assert.Equal(t, "api2.example.com", api2Cookie.Domain)
+		assert.Equal(t, "api2.test.com", api2Cookie.Domain)
 	})
 
 	t.Run("Clears all cookies", func(t *testing.T) {

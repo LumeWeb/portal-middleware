@@ -1,6 +1,7 @@
-package auth
+package middleware
 
 import (
+	"go.lumeweb.com/portal-middleware/auth"
 	"net/http"
 
 	"go.lumeweb.com/portal-middleware/context"
@@ -10,7 +11,7 @@ import (
 // Verifies both user existence and access permissions before allowing request progression.
 // Chain with AuthMiddleware to ensure user context is available.
 // Returns 401 Unauthorized for invalid users, 403 Forbidden for access denials.
-func AccessMiddleware(checker UserChecker, accessChecker AccessChecker) func(http.Handler) http.Handler {
+func AccessMiddleware(checker auth.UserChecker, accessChecker auth.AccessChecker) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			deny := func() {

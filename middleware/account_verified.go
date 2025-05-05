@@ -1,9 +1,9 @@
 package middleware
 
 import (
+	"go.lumeweb.com/portal-middleware/auth/middleware"
 	"net/http"
 
-	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal-middleware/auth/adapter"
 	"go.lumeweb.com/portal/core"
 )
@@ -12,5 +12,5 @@ import (
 // using the core.UserService from the provided context.
 func AccountVerifiedMiddleware(ctx core.Context) func(http.Handler) http.Handler {
 	userChecker := adapter.NewUserCheckerFromCore(ctx)
-	return auth.AccountVerified(userChecker)
+	return middleware.AccountVerified(userChecker)
 }

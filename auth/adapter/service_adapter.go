@@ -1,8 +1,6 @@
 package adapter
 
 import (
-	"net/http"
-
 	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal/core"
 )
@@ -87,11 +85,4 @@ func NewUserCheckerFromCore(ctx core.Context) auth.UserChecker {
 func NewAccessCheckerFromCore(ctx core.Context) auth.AccessChecker {
 	accessService := ctx.Service(core.ACCESS_SERVICE).(core.AccessService)
 	return NewAccessChecker(accessService)
-}
-
-// NewAccessMiddlewareFromCore creates an AccessMiddleware using services from core.Context
-func NewAccessMiddlewareFromCore(ctx core.Context) func(http.Handler) http.Handler {
-	userChecker := NewUserCheckerFromCore(ctx)
-	accessChecker := NewAccessCheckerFromCore(ctx)
-	return auth.AccessMiddleware(userChecker, accessChecker)
 }

@@ -7,12 +7,27 @@ Secure middleware package for Go web applications providing authentication, auth
 ## Features
 
 - JWT-based authentication with Ed25519 signatures
-- Role-Based Access Control (RBAC) with path pattern matching
+- Role-Based Access Control (RBAC) with path pattern matching  
 - CORS configuration with security best practices
 - Swagger/OpenAPI 3.0 documentation support
 - TUS protocol v1.0.0 extensions for resumable uploads
 - Account verification workflows
 - Context-aware request processing
+- Type-safe custom claims handling
+
+## Package Structure
+
+```
+/auth
+  /adapter      # Core service adapters
+  /jwt          # JWT token utilities  
+  /middleware   # HTTP middleware implementations
+  /validation   # Token validation logic
+/cors           # CORS middleware  
+/swagger        # OpenAPI documentation
+/tus            # File upload protocol
+/util           # Helper utilities
+```
 
 ## Installation
 
@@ -28,23 +43,26 @@ package main
 import (
 	"net/http"
 	
-	"go.lumeweb.com/portal-middleware/auth"
+	"go.lumeweb.com/portal-middleware/auth/adapter"
+	"go.lumeweb.com/portal-middleware/auth/middleware"
 	"go.lumeweb.com/portal-middleware/cors"
 	"go.lumeweb.com/portal-middleware/swagger"
 	"go.lumeweb.com/portal-middleware/util"
+	"go.lumeweb.com/portal/core"
 )
 
 func main() {
 	router := http.NewServeMux()
+	coreCtx := core.GetContext()
 	
-	// Initialize core configuration
-	config := auth.NewConfigProvider() 
+	// Initialize configuration
+	config := adapter.NewFromCore(coreCtx)
 	
 	// Create middleware chain
 	chain := util.New(router).
-		WithAuth(auth.AuthMiddlewareOptions{
+		WithAuth(middleware.AuthMiddlewareOptions{
 			Config:  config,
-			Purpose: "api-access",  // Required for claims validation
+			Purpose: "api-access",
 		}).
 		WithCORS(cors.Config{
 			AllowedOrigins: []string{"https://example.com"},
@@ -61,49 +79,39 @@ func main() {
 }
 ```
 
-## Configuration
-
-Implement the `ConfigProvider` interface to provide:
-- Ed25519 private key for JWT signing
-- Domain name for token validation
-- Cookie security settings (SameSite, Secure, HttpOnly)
-- API endpoint configurations for multi-domain deployments
-
-Example implementation:
+## Custom Claims Example
 
 ```go
-type MyConfig struct {
-	privateKey ed25519.PrivateKey
-	domain     string
+type CustomClaims struct {
+	*gjwt.RegisteredClaims
+	Role string `json:"role"`
 }
 
-func (c *MyConfig) GetPrivateKey() ed25519.PrivateKey {
-	return c.privateKey
-}
+// Create token
+token, err := jwt.CreateToken(
+	privateKey,
+	"example.com", 
+	"user123",
+	jwt.PurposeLogin,
+	time.Hour,
+	jwt.WithClaims(&CustomClaims{Role: "admin"}),
+)
 
-func (c *MyConfig) GetDomain() string {
-	return c.domain
-}
-
-func (c *MyConfig) GetAuthCookieName() string {
-	return "auth_token"
-}
-
-func (c *MyConfig) GetAuthTokenName() string {
-	return "auth_token"
+// Retrieve in handler  
+claims, ok := auth.GetClaims[*CustomClaims](r.Context())
+if ok {
+	log.Printf("User role: %s", claims.Role)
 }
 ```
 
 ## Security Features
 
 - Token expiration enforcement with optional refresh
-- SameSite cookie policies to prevent CSRF
+- SameSite cookie policies to prevent CSRF  
 - Type-safe custom claims handling
 - Purpose-specific claim validation
-- Audience claim validation
 - Contextual user ID injection
 - Automatic token revocation detection
-- HSTS-ready security headers
 
 ## Testing
 
@@ -120,7 +128,7 @@ Full package documentation available on [pkg.go.dev](https://pkg.go.dev/go.lumew
 ## Contributing
 
 Contributions welcome! Please follow:
-1. Fork the repository
+1. Fork the repository  
 2. Create a feature branch
 3. Submit a pull request
 

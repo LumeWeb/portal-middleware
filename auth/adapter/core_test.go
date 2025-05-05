@@ -1,7 +1,6 @@
 package adapter
 
 import (
-	"go.lumeweb.com/portal-middleware/auth"
 	"go.sia.tech/coreutils/wallet"
 	"testing"
 
@@ -53,7 +52,7 @@ func TestCoreConfigProvider(t *testing.T) {
 
 	t.Run("implements ConfigProvider interface", func(t *testing.T) {
 		var provider interface{} = NewFromCore(ctx)
-		_, ok := provider.(auth.ConfigProvider)
+		_, ok := provider.(ConfigProvider)
 		require.True(t, ok, "Should implement ConfigProvider interface")
 	})
 }

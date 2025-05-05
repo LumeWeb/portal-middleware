@@ -6,9 +6,9 @@
 package util
 
 import (
-	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal-middleware/auth/adapter"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
+	"go.lumeweb.com/portal-middleware/auth/middleware"
 	"go.lumeweb.com/portal-middleware/cors"
 	"go.lumeweb.com/portal/core"
 	"net/http"
@@ -38,8 +38,8 @@ func (m *Middleware) Then() http.Handler {
 // WithAuth adds authentication middleware using a ConfigProvider
 // WithAuth adds authentication middleware to the chain.
 // Configures JWT validation with the specified purpose and configuration.
-func (m *Middleware) WithAuth(config auth.ConfigProvider, purpose jwt.JWTPurpose) *Middleware {
-	return m.Chain(auth.AuthMiddleware(auth.AuthMiddlewareOptions{
+func (m *Middleware) WithAuth(config adapter.ConfigProvider, purpose jwt.Purpose) *Middleware {
+	return m.Chain(middleware.AuthMiddleware(middleware.AuthMiddlewareOptions{
 		Config:         config,
 		Purpose:        purpose,
 		ExpiredAllowed: false,
@@ -47,7 +47,7 @@ func (m *Middleware) WithAuth(config auth.ConfigProvider, purpose jwt.JWTPurpose
 }
 
 // WithAuthFromCore adds authentication middleware using core.Context
-func (m *Middleware) WithAuthFromCore(ctx core.Context, purpose jwt.JWTPurpose) *Middleware {
+func (m *Middleware) WithAuthFromCore(ctx core.Context, purpose jwt.Purpose) *Middleware {
 	return m.WithAuth(adapter.NewFromCore(ctx), purpose)
 }
 
