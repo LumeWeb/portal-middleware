@@ -12,6 +12,14 @@ import (
 // This helps prevent token reuse across different application components.
 type Purpose string
 
+// ClaimSetter defines an interface for setting standard JWT claim values
+type ClaimSetter interface {
+	SetIssuer(string)
+	SetSubject(string)
+	SetExpiresAt(*gjwt.NumericDate)
+	SetAudience([]string)
+}
+
 // VerifyTokenFunc is a callback type for performing custom claim validations.
 // Used to add additional security checks beyond standard JWT validation.
 type VerifyTokenFunc func(claim *gjwt.RegisteredClaims) error
@@ -100,20 +108,12 @@ func CreateToken(privateKey ed25519.PrivateKey, domain string, subject string, p
 		if purpose != PurposeNone {
 			registeredClaims.Audience = []string{string(purpose)}
 		}
-	} else if claims, ok := options.claims.(gjwt.Claims); ok {
-		// Handle custom claims that embed RegisteredClaims
-		if customClaims, ok := claims.(interface {
-			SetIssuer(string)
-			SetSubject(string)
-			SetExpiresAt(*gjwt.NumericDate)
-			SetAudience([]string)
-		}); ok {
-			customClaims.SetIssuer(domain)
-			customClaims.SetSubject(subject)
-			customClaims.SetExpiresAt(gjwt.NewNumericDate(time.Now().Add(expiration)))
-			if purpose != PurposeNone {
-				customClaims.SetAudience([]string{string(purpose)})
-			}
+	} else if setter, ok := options.claims.(ClaimSetter); ok {
+		setter.SetIssuer(domain)
+		setter.SetSubject(subject)
+		setter.SetExpiresAt(gjwt.NewNumericDate(time.Now().Add(expiration)))
+		if purpose != PurposeNone {
+			setter.SetAudience([]string{string(purpose)})
 		}
 	}
 
