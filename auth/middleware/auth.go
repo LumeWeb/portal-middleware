@@ -162,14 +162,14 @@ func WithEmptyAllowed(allow bool) AuthMiddlewareOption {
 }
 
 // WithExpiredAllowed configures whether expired tokens are allowed
-func WithExpiredAllowed(allow bool) func(*AuthMiddlewareOptions) {
+func WithExpiredAllowed(allow bool) AuthMiddlewareOption {
 	return func(opts *AuthMiddlewareOptions) {
 		opts.ExpiredAllowed = allow
 	}
 }
 
 // WithJWTOptions adds JWT-specific options
-func WithJWTOptions(jwtOpts ...jwt.Option) func(*AuthMiddlewareOptions) {
+func WithJWTOptions(jwtOpts ...jwt.Option) AuthMiddlewareOption {
 	return func(opts *AuthMiddlewareOptions) {
 		opts.Options = append(opts.Options, jwtOpts...)
 	}

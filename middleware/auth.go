@@ -26,7 +26,7 @@ func AuthMiddleware(ctx core.Context, purpose jwt.Purpose, options ...AuthOption
 }
 
 // AuthOption configures the authentication middleware
-type AuthOption func(*middleware.AuthMiddlewareOptions)
+type AuthOption = middleware.AuthMiddlewareOption
 
 // WithAuthEmptyAllowed allows requests without authentication tokens
 func WithAuthEmptyAllowed(allow bool) AuthOption {
@@ -41,4 +41,9 @@ func WithAuthExpiredAllowed(allow bool) AuthOption {
 // WithAuthValidator sets a custom token validator
 func WithAuthValidator(validator validation.TokenValidator) AuthOption {
 	return middleware.WithValidator(validator)
+}
+
+// WithAuthJWTOptions applies custom JWT options to the authentication middleware configuration.
+func WithAuthJWTOptions(jwtOpts ...jwt.Option) AuthOption {
+	return middleware.WithJWTOptions(jwtOpts...)
 }
