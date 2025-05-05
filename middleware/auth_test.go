@@ -66,7 +66,7 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("empty allowed", func(t *testing.T) {
-		middleware := AuthMiddleware(ctx, "test-purpose", WithEmptyAllowed(true))
+		middleware := AuthMiddleware(ctx, "test-purpose", WithAuthEmptyAllowed(true))
 
 		handlerCalled := false
 		testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -90,8 +90,8 @@ func TestAuthMiddleware(t *testing.T) {
 			Return(&gjwt.RegisteredClaims{Subject: "123"}, nil, gjwt.ErrTokenExpired)
 
 		middleware := AuthMiddleware(ctx, "test-purpose",
-			WithExpiredAllowed(true),
-			WithValidator(mockValidator), // Use our mock validator
+			WithAuthExpiredAllowed(true),
+			WithAuthValidator(mockValidator), // Use our mock validator
 		)
 
 		handlerCalled := false
