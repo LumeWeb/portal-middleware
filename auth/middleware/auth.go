@@ -14,6 +14,10 @@ import (
 	"strconv"
 )
 
+// AuthMiddlewareOption defines a functional option for configuring AuthMiddlewareOptions.
+// It modifies the settings or behavior of AuthMiddlewareOptions during initialization.
+type AuthMiddlewareOption = func(*AuthMiddlewareOptions)
+
 // AuthMiddlewareOptions configures the authentication middleware behavior.
 // Contains settings for token validation, purpose restrictions, and error handling.
 // This struct is defined in auth/types.go to avoid duplication
@@ -89,7 +93,7 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 
 					if expectedClaimsType != nil {
 						actualType := reflect.TypeOf(customClaims)
-						expectedPtrType := reflect.PtrTo(expectedClaimsType)
+						expectedPtrType := reflect.PointerTo(expectedClaimsType)
 
 						// Check if types match directly or via pointer
 						if !actualType.AssignableTo(expectedClaimsType) &&
@@ -111,5 +115,62 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 			r = r.WithContext(ctx)
 			next.ServeHTTP(w, r)
 		})
+	}
+}
+
+// NewAuthOptions creates and configures AuthMiddlewareOptions in one step
+func NewAuthOptions(config adapter.ConfigProvider, purpose jwt.Purpose, opts ...AuthMiddlewareOption) *AuthMiddlewareOptions {
+	options := &AuthMiddlewareOptions{
+		Config:         config,
+		Purpose:        purpose,
+		EmptyAllowed:   false, // default
+		ExpiredAllowed: false, // default
+	}
+
+	for _, opt := range opts {
+		opt(options)
+	}
+	return options
+}
+
+// WithConfig sets the ConfigProvider for the options
+func WithConfig(config adapter.ConfigProvider) AuthMiddlewareOption {
+	return func(opts *AuthMiddlewareOptions) {
+		opts.Config = config
+	}
+}
+
+// WithPurpose sets the JWT purpose for the options
+func WithPurpose(purpose jwt.Purpose) AuthMiddlewareOption {
+	return func(opts *AuthMiddlewareOptions) {
+		opts.Purpose = purpose
+	}
+}
+
+// WithValidator sets a custom token validator
+func WithValidator(validator validation.TokenValidator) AuthMiddlewareOption {
+	return func(opts *AuthMiddlewareOptions) {
+		opts.Validator = validator
+	}
+}
+
+// WithEmptyAllowed configures whether empty tokens are allowed
+func WithEmptyAllowed(allow bool) AuthMiddlewareOption {
+	return func(opts *AuthMiddlewareOptions) {
+		opts.EmptyAllowed = allow
+	}
+}
+
+// WithExpiredAllowed configures whether expired tokens are allowed
+func WithExpiredAllowed(allow bool) func(*AuthMiddlewareOptions) {
+	return func(opts *AuthMiddlewareOptions) {
+		opts.ExpiredAllowed = allow
+	}
+}
+
+// WithJWTOptions adds JWT-specific options
+func WithJWTOptions(jwtOpts ...jwt.Option) func(*AuthMiddlewareOptions) {
+	return func(opts *AuthMiddlewareOptions) {
+		opts.Options = append(opts.Options, jwtOpts...)
 	}
 }
