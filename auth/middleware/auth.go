@@ -83,13 +83,8 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 
 				// Only store custom claims if they match the expected type
 				if customClaims != nil {
-					var expectedClaimsType reflect.Type
-					for _, opt := range options.Options {
-						if claimOpt, ok := opt.(jwt.WithClaimsOpt); ok {
-							expectedClaimsType = reflect.TypeOf(claimOpt.Claims()).Elem()
-							break
-						}
-					}
+					claimsType := jwt.GetClaimsType(options.Options)
+					expectedClaimsType := reflect.TypeOf(claimsType).Elem()
 
 					if expectedClaimsType != nil {
 						actualType := reflect.TypeOf(customClaims)

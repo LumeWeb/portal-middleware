@@ -58,3 +58,86 @@ func TestMapClaims(t *testing.T) {
 		assert.Equal(t, 42, claims.OtherField)
 	})
 }
+
+func TestGetClaimsType(t *testing.T) {
+	t.Run("no options returns RegisteredClaims", func(t *testing.T) {
+		claimsType := GetClaimsType(nil)
+		_, ok := claimsType.(*gjwt.RegisteredClaims)
+		assert.True(t, ok, "should return RegisteredClaims by default")
+	})
+
+	t.Run("empty options returns RegisteredClaims", func(t *testing.T) {
+		claimsType := GetClaimsType([]Option{})
+		_, ok := claimsType.(*gjwt.RegisteredClaims)
+		assert.True(t, ok, "should return RegisteredClaims by default")
+	})
+
+	t.Run("with claims option returns custom claims type", func(t *testing.T) {
+		expectedClaims := &TestClaims{}
+		opts := []Option{WithClaims(expectedClaims)}
+
+		claimsType := GetClaimsType(opts)
+		assert.Equal(t, expectedClaims, claimsType, "should return the custom claims type")
+	})
+
+	t.Run("multiple options returns first claims type", func(t *testing.T) {
+		expectedClaims := &TestClaims{}
+		opts := []Option{
+			WithModifiers(func(c gjwt.Claims) {}),
+			WithClaims(expectedClaims),
+			WithClaims(&gjwt.RegisteredClaims{}),
+		}
+
+		claimsType := GetClaimsType(opts)
+		assert.Equal(t, expectedClaims, claimsType, "should return first custom claims type")
+	})
+
+	t.Run("with default parameter returns default when no options", func(t *testing.T) {
+		defaultClaims := &TestClaims{}
+		claimsType := GetClaimsType(nil, defaultClaims)
+		assert.Equal(t, defaultClaims, claimsType, "should return default when no options")
+	})
+
+	t.Run("with default parameter returns default when empty options", func(t *testing.T) {
+		defaultClaims := &TestClaims{}
+		claimsType := GetClaimsType([]Option{}, defaultClaims)
+		assert.Equal(t, defaultClaims, claimsType, "should return default when empty options")
+	})
+
+	t.Run("with default parameter returns custom claims type from options", func(t *testing.T) {
+		expectedClaims := &TestClaims{}
+		defaultClaims := &gjwt.RegisteredClaims{}
+		opts := []Option{WithClaims(expectedClaims)}
+
+		claimsType := GetClaimsType(opts, defaultClaims)
+		assert.Equal(t, expectedClaims, claimsType, "should return custom claims type from options")
+	})
+
+	t.Run("with default parameter skips RegisteredClaims in options", func(t *testing.T) {
+		expectedClaims := &TestClaims{}
+		defaultClaims := &gjwt.RegisteredClaims{}
+		opts := []Option{
+			WithClaims(&gjwt.RegisteredClaims{}),
+			WithClaims(expectedClaims),
+		}
+
+		claimsType := GetClaimsType(opts, defaultClaims)
+		assert.Equal(t, expectedClaims, claimsType, "should skip RegisteredClaims in options when default is provided")
+	})
+
+	t.Run("with default parameter returns default when options has only RegisteredClaims", func(t *testing.T) {
+		expectedClaims := &TestClaims{}
+		opts := []Option{WithClaims(&gjwt.RegisteredClaims{})}
+
+		claimsType := GetClaimsType(opts, expectedClaims)
+		assert.Equal(t, expectedClaims, claimsType, "should return default when options has only RegisteredClaims")
+	})
+
+	t.Run("with nil default falls back to RegisteredClaims", func(t *testing.T) {
+		opts := []Option{WithClaims(&gjwt.RegisteredClaims{})}
+
+		claimsType := GetClaimsType(opts, nil)
+		_, ok := claimsType.(*gjwt.RegisteredClaims)
+		assert.True(t, ok, "should fall back to RegisteredClaims when default is nil")
+	})
+}

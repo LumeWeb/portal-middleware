@@ -122,6 +122,41 @@ func (d *domainCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 	http.SetCookie(w, cookie)
 }
 
+func (d *domainCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, ctx core.Context, opts ...jwt.Option) {
+	cookieName := d.base.(*coreCookieSetter).config.GetAuthCookieName()
+
+	// Get the main cookie from the request
+	mainCookie, err := r.Cookie(cookieName)
+	if err != nil {
+		return // No cookie to echo
+	}
+
+	// Use provided options for claim type, or default to RegisteredClaims
+	claimsType := jwt.GetClaimsType(opts)
+	claims, err := jwt.DecodeToken(mainCookie.Value, claimsType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	exp, err := claims.GetExpirationTime()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Set cookie for this domain using the main cookie's value
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieName,
+		Value:    mainCookie.Value,
+		MaxAge:   int(time.Until(exp.Time).Seconds()),
+		Secure:   true,
+		HttpOnly: true,
+		Path:     "/",
+		Domain:   d.domain,
+	})
+}
+
 // NewChainedCookieSetter creates a CookieSetter that chains multiple setters
 func NewChainedCookieSetter(setters ...CookieSetter) CookieSetter {
 	return &chainedCookieSetter{setters: setters}
@@ -146,5 +181,12 @@ func (c *chainedCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string
 func (c *chainedCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 	for _, setter := range c.setters {
 		setter.ClearJWTCookie(w)
+	}
+}
+
+func (c *chainedCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, ctx core.Context, opts ...jwt.Option) {
+	// Call EchoAuthCookie on all setters, not just the first
+	for _, setter := range c.setters {
+		setter.EchoAuthCookie(w, r, ctx, opts...)
 	}
 }

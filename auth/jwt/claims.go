@@ -61,3 +61,28 @@ func MapClaims(rawClaims gjwt.MapClaims, target interface{}) error {
 
 	return nil
 }
+
+// GetClaimsTypeFromOptions extracts the claims type from JWT options with optional default
+func GetClaimsType(opts []Option, defaultClaims ...gjwt.Claims) gjwt.Claims {
+	var fallback gjwt.Claims
+	if len(defaultClaims) > 0 {
+		fallback = defaultClaims[0]
+	} else {
+		fallback = &gjwt.RegisteredClaims{}
+	}
+
+	for _, opt := range opts {
+		if claimOpt, ok := opt.(WithClaimsOpt); ok {
+			// If we have a fallback, skip RegisteredClaims in options
+			if fallback != nil {
+				if _, isRegistered := claimOpt.Claims().(*gjwt.RegisteredClaims); !isRegistered {
+					return claimOpt.Claims()
+				}
+				continue
+			}
+			return claimOpt.Claims()
+		}
+	}
+
+	return fallback
+}

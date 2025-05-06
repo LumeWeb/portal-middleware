@@ -3,12 +3,14 @@ package adapter
 import (
 	"crypto/ed25519"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	coreTesting "go.lumeweb.com/portal/core/testing"
 )
 
 func TestCookieSetter(t *testing.T) {
@@ -50,54 +52,69 @@ func TestCookieSetter(t *testing.T) {
 		assert.Equal(t, "", cookie.Value)
 		assert.Equal(t, -1, cookie.MaxAge)
 	})
-}
 
-func TestMultiCookieSetter(t *testing.T) {
-	mockConfig := NewMockConfigProvider(t)
-	mockAPIProvider := NewMockAPIProvider(t)
+	t.Run("EchoAuthCookie echoes valid cookie", func(t *testing.T) {
+		// Create test context
+		ctx := coreTesting.NewTestContext(t)
+		ctx.Config().Config().Core.Domain = "test.com"
 
-	_, privKey, _ := ed25519.GenerateKey(nil)
+		// First set a cookie
+		setW := httptest.NewRecorder()
+		token, err := setter.SetJWTCookie(setW, "user123", jwt.PurposeLogin, time.Hour)
+		require.NoError(t, err)
 
-	// Setup mock expectations
-	mockConfig.On("GetPrivateKey").Return(privKey)
-	mockConfig.On("GetDomain").Return("test.com")
-	mockConfig.On("GetAuthCookieName").Return("auth_token")
-	mockAPIProvider.On("GetAPIs").Return([]string{"api1.test.com", "api2.test.com"})
+		// Create request with the cookie
+		req := httptest.NewRequest("GET", "/", nil)
+		for _, cookie := range setW.Result().Cookies() {
+			req.AddCookie(cookie)
+		}
 
-	setter := NewMultiCookieSetter(mockConfig, mockAPIProvider)
+		// Echo the cookie
+		echoW := httptest.NewRecorder()
+		setter.EchoAuthCookie(echoW, req, ctx)
 
-	t.Run("Sets cookies for all domains", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		token, err := setter.SetJWTCookie(w, "user123", jwt.PurposeLogin, time.Hour)
-
-		require.NoError(t, err, "Should create token without error")
-		assert.NotEmpty(t, token, "Token should not be empty")
-
-		cookies := w.Result().Cookies()
-		require.Len(t, cookies, 3, "Should set cookies for main domain + 2 APIs")
-
-		// Verify main domain cookie
-		mainCookie := cookies[0]
-		assert.Equal(t, "test.com", mainCookie.Domain)
-		assert.Equal(t, "auth_token", mainCookie.Name)
-
-		// Verify API subdomain cookies
-		api1Cookie := cookies[1]
-		assert.Equal(t, "api1.test.com", api1Cookie.Domain)
-		api2Cookie := cookies[2]
-		assert.Equal(t, "api2.test.com", api2Cookie.Domain)
+		// Verify echoed cookie
+		echoCookies := echoW.Result().Cookies()
+		require.Len(t, echoCookies, 1)
+		echoCookie := echoCookies[0]
+		assert.Equal(t, "auth_token", echoCookie.Name)
+		assert.Equal(t, token, echoCookie.Value)
+		assert.Equal(t, "test.com", echoCookie.Domain)
 	})
 
-	t.Run("Clears all cookies", func(t *testing.T) {
-		w := httptest.NewRecorder()
-		setter.ClearJWTCookie(w)
+	t.Run("EchoAuthCookie ignores invalid cookie", func(t *testing.T) {
+		// Create test context
+		ctx := coreTesting.NewTestContext(t)
+		ctx.Config().Config().Core.Domain = "test.com"
 
-		cookies := w.Result().Cookies()
-		require.Len(t, cookies, 3, "Should clear cookies for all domains")
+		// Create request with invalid cookie
+		req := httptest.NewRequest("GET", "/", nil)
+		req.AddCookie(&http.Cookie{
+			Name:  "auth_token",
+			Value: "invalid.token",
+		})
 
-		for _, cookie := range cookies {
-			assert.Equal(t, "", cookie.Value)
-			assert.Equal(t, -1, cookie.MaxAge)
-		}
+		// Echo the cookie
+		echoW := httptest.NewRecorder()
+		setter.EchoAuthCookie(echoW, req, ctx)
+
+		// Should return error
+		assert.Equal(t, http.StatusInternalServerError, echoW.Code)
+	})
+
+	t.Run("EchoAuthCookie ignores missing cookie", func(t *testing.T) {
+		// Create test context
+		ctx := coreTesting.NewTestContext(t)
+		ctx.Config().Config().Core.Domain = "test.com"
+
+		// Create request without cookie
+		req := httptest.NewRequest("GET", "/", nil)
+
+		// Echo the cookie
+		echoW := httptest.NewRecorder()
+		setter.EchoAuthCookie(echoW, req, ctx)
+
+		// Should not set any cookies
+		assert.Len(t, echoW.Result().Cookies(), 0)
 	})
 }

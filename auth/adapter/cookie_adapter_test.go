@@ -2,8 +2,10 @@ package adapter
 
 import (
 	"crypto/ed25519"
+	gjwt "github.com/golang-jwt/jwt/v5"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"go.sia.tech/coreutils/wallet"
+	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
@@ -65,7 +67,7 @@ func TestCoreCookieSetter(t *testing.T) {
 		assert.WithinDuration(t, time.Now().Add(time.Hour), cookie.Expires, time.Second)
 	})
 
-	t.Run("ClearJWTCookie removes cookie", func(t *testing.T) {
+	t.Run("ClearJWTCCookie removes cookie", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		setter.ClearJWTCookie(w)
 
@@ -84,10 +86,13 @@ func TestMultiCoreSetterFromCore(t *testing.T) {
 	ctx := coreTesting.NewTestContext(t)
 
 	// Configure core context with test values
-	cfg := ctx.Config().Config()
-	cfg.Core.Domain = "main.example.com"
 	seedPhrase := wallet.NewSeedPhrase()
-	err := cfg.Core.Identity.DecodeMapstructure(seedPhrase)
+	cfg := ctx.Config()
+	err := cfg.Update("core.domain", "main.example.com")
+	if err != nil {
+		t.Error(err)
+	}
+	err = cfg.Update("core.identity", seedPhrase)
 	if err != nil {
 		t.Error(err)
 	}
@@ -136,5 +141,128 @@ func TestMultiCoreSetterFromCore(t *testing.T) {
 			assert.Equal(t, "", cookie.Value)
 			assert.Equal(t, -1, cookie.MaxAge)
 		}
+	})
+
+	t.Run("EchoAuthCookie echoes to all domains", func(t *testing.T) {
+		// First set a cookie
+		setW := httptest.NewRecorder()
+		_, err := setter.SetJWTCookie(setW, "user123", jwt.PurposeLogin, time.Hour)
+		require.NoError(t, err)
+
+		// Create request with the cookie
+		req := httptest.NewRequest("GET", "/", nil)
+		for _, cookie := range setW.Result().Cookies() {
+			if cookie.Domain == "main.example.com" {
+				req.AddCookie(cookie)
+				break
+			}
+		}
+
+		// Echo the cookie
+		echoW := httptest.NewRecorder()
+		setter.EchoAuthCookie(echoW, req, ctx)
+
+		// Verify echoed cookies
+		echoCookies := echoW.Result().Cookies()
+		require.Len(t, echoCookies, 3, "Should echo to main domain + 2 APIs")
+
+		// Verify main domain cookie
+		mainCookie := echoCookies[0]
+		assert.Equal(t, "main.example.com", mainCookie.Domain)
+		decodedJwt, err := jwt.DecodeToken(mainCookie.Value, &gjwt.RegisteredClaims{})
+		if err != nil {
+			t.Error(err)
+		}
+		issuer, err := decodedJwt.GetIssuer()
+		if err != nil {
+			t.Error(err)
+		}
+		assert.Equal(t, issuer, "main.example.com")
+		// Verify API subdomain cookies
+		api1Cookie := echoCookies[1]
+		assert.Equal(t, "api1.example.com", api1Cookie.Domain)
+		api2Cookie := echoCookies[2]
+		assert.Equal(t, "api2.example.com", api2Cookie.Domain)
+	})
+
+	t.Run("EchoAuthCookie ignores invalid cookie", func(t *testing.T) {
+		// Create request with invalid cookie
+		req := httptest.NewRequest("GET", "/", nil)
+		req.AddCookie(&http.Cookie{
+			Name:   "auth_token",
+			Value:  "invalid.token",
+			Domain: "main.example.com",
+		})
+
+		// Echo the cookie
+		echoW := httptest.NewRecorder()
+		setter.EchoAuthCookie(echoW, req, ctx)
+
+		// Should return error
+		assert.Equal(t, http.StatusInternalServerError, echoW.Code)
+	})
+
+	t.Run("DomainCookieSetter echoes only matching domain", func(t *testing.T) {
+		// Extract the main cookie setter from the chained setter
+		chainedSetter, ok := setter.(*chainedCookieSetter)
+		require.True(t, ok, "Expected chainedCookieSetter")
+		require.NotEmpty(t, chainedSetter.setters, "Chained setter should have at least one setter")
+
+		mainSetter, ok := chainedSetter.setters[0].(CookieSetter)
+		require.True(t, ok, "First setter should be a CookieSetter")
+
+		domainSetter := newDomainCookieSetter(mainSetter, "api1.example.com")
+
+		// First set a cookie
+		setW := httptest.NewRecorder()
+		token, err := domainSetter.SetJWTCookie(setW, "user123", jwt.PurposeLogin, time.Hour)
+		require.NoError(t, err)
+
+		// Create request with the cookie
+		req := httptest.NewRequest("GET", "/", nil)
+		req.AddCookie(&http.Cookie{
+			Name:   "auth_token",
+			Value:  token,
+			Domain: "api1.example.com",
+		})
+
+		// Echo the cookie
+		echoW := httptest.NewRecorder()
+		domainSetter.EchoAuthCookie(echoW, req, ctx)
+
+		// Verify only one cookie was echoed
+		echoCookies := echoW.Result().Cookies()
+		require.Len(t, echoCookies, 1)
+		echoCookie := echoCookies[0]
+		assert.Equal(t, "api1.example.com", echoCookie.Domain)
+		assert.Equal(t, token, echoCookie.Value)
+	})
+
+	t.Run("DomainCookieSetter ignores non-matching domain", func(t *testing.T) {
+		// Extract the main cookie setter from the chain
+		chainedSetter, ok := setter.(*chainedCookieSetter)
+		require.True(t, ok, "Expected chainedCookieSetter")
+		require.NotEmpty(t, chainedSetter.setters, "Chained setter should have at least one setter")
+
+		mainSetter, ok := chainedSetter.setters[0].(*coreCookieSetter)
+		require.True(t, ok, "First setter should be coreCookieSetter")
+
+		// Create domain-specific setter using the main setter
+		domainSetter := newDomainCookieSetter(mainSetter, "api1.example.com")
+
+		// Create request with cookie for different domain
+		req := httptest.NewRequest("GET", "/", nil)
+		req.AddCookie(&http.Cookie{
+			Name:   "auth_token",
+			Value:  "some.token",
+			Domain: "other.example.com",
+		})
+
+		// Echo the cookie
+		echoW := httptest.NewRecorder()
+		domainSetter.EchoAuthCookie(echoW, req, ctx)
+
+		// Should not set any cookies
+		assert.Len(t, echoW.Result().Cookies(), 0)
 	})
 }

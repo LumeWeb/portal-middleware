@@ -51,15 +51,8 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.Purpose) (*g
 	}
 
 	// 2. Process options to determine expected claims type
-	var expectedClaimsType reflect.Type
-	var expectedClaims gjwt.Claims
-	for _, opt := range v.options {
-		if claimOpt, ok := opt.(jwt.WithClaimsOpt); ok {
-			expectedClaims = claimOpt.Claims()
-			expectedClaimsType = reflect.TypeOf(expectedClaims).Elem()
-			break
-		}
-	}
+	expectedClaims := jwt.GetClaimsType(v.options)
+	expectedClaimsType := reflect.TypeOf(expectedClaims).Elem()
 
 	// 3. If custom claims expected, validate their presence and structure
 	var customClaims gjwt.Claims

@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"go.lumeweb.com/portal-middleware/auth/jwt"
+	"go.lumeweb.com/portal/core"
 	"net/http"
 	"time"
 )
@@ -17,6 +18,7 @@ type CookieSetter interface {
 	SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.Purpose,
 		expiry time.Duration, opts ...jwt.Option) (string, error)
 	ClearJWTCookie(w http.ResponseWriter)
+	EchoAuthCookie(w http.ResponseWriter, r *http.Request, ctx core.Context, opts ...jwt.Option)
 }
 
 // SetJWTCookie sets a JWT token as a cookie
@@ -64,6 +66,40 @@ func (s *coreCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 	}
 
 	http.SetCookie(w, cookie)
+}
+
+// EchoAuthCookie implements CookieSetter interface for coreCookieSetter
+func (s *coreCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, ctx core.Context, opts ...jwt.Option) {
+	cookieName := s.config.GetAuthCookieName()
+	cookie, err := r.Cookie(cookieName)
+	if err != nil {
+		return // No cookie to echo
+	}
+
+	// Use provided options for claim type, or default to RegisteredClaims
+	claimsType := jwt.GetClaimsType(opts)
+	claims, err := jwt.DecodeToken(cookie.Value, claimsType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	exp, err := claims.GetExpirationTime()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	domain := ctx.Config().Config().Core.Domain
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieName,
+		Value:    cookie.Value,
+		MaxAge:   int(time.Until(exp.Time).Seconds()),
+		Secure:   true,
+		HttpOnly: true,
+		Path:     "/",
+		Domain:   domain,
+	})
 }
 
 // NewCookieSetter creates a new defaultCookieSetter
@@ -157,6 +193,94 @@ func (m *multiCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 		}
 
 		http.SetCookie(w, cookie)
+	}
+}
+
+// EchoAuthCookie implements CookieSetter interface for multiCookieSetter
+func (m *multiCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, ctx core.Context, opts ...jwt.Option) {
+	cookieName := m.Config.GetAuthCookieName()
+	mainCookie, err := r.Cookie(cookieName)
+	if err != nil {
+		return // No main cookie to echo
+	}
+
+	// Use provided options for claim type, or default to RegisteredClaims
+	claimsType := jwt.GetClaimsType(opts)
+	claims, err := jwt.DecodeToken(mainCookie.Value, claimsType)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	exp, err := claims.GetExpirationTime()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Extract subject and purpose from the original token
+	subject, err := claims.GetSubject()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	audience, err := claims.GetAudience()
+	if err != nil || len(audience) == 0 {
+		http.Error(w, "missing audience", http.StatusInternalServerError)
+		return
+	}
+	purpose := jwt.Purpose(audience[0])
+
+	// Echo main domain cookie with correct issuer
+	mainDomain := ctx.Config().Config().Core.Domain
+	mainToken, err := jwt.CreateToken(
+		m.Config.GetPrivateKey(),
+		mainDomain,
+		subject,
+		purpose,
+		time.Until(exp.Time),
+		opts...,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     cookieName,
+		Value:    mainToken,
+		MaxAge:   int(time.Until(exp.Time).Seconds()),
+		Secure:   true,
+		HttpOnly: true,
+		Path:     "/",
+		Domain:   mainDomain,
+	})
+
+	// Echo API subdomain cookies with correct issuer
+	for _, api := range m.APIs.GetAPIs() {
+		apiToken, err := jwt.CreateToken(
+			m.Config.GetPrivateKey(),
+			api, // ✅ Use the API domain as the issuer
+			subject,
+			purpose,
+			time.Until(exp.Time),
+			opts...,
+		)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     cookieName,
+			Value:    apiToken,
+			MaxAge:   int(time.Until(exp.Time).Seconds()),
+			Secure:   true,
+			HttpOnly: true,
+			Path:     "/",
+			Domain:   api,
+		})
 	}
 }
 
