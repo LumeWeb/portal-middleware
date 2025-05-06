@@ -12,137 +12,95 @@
 // The package integrates with the portal ecosystem while remaining framework-agnostic
 // for standalone use.
 //
-// # Core Components
+// # JWT Token API
 //
-// 1. Authentication Middleware:
-//   - Token creation/validation with purpose-specific claims
-//   - Cookie-based session management with automatic refresh
-//   - Integration with ConfigProvider for security settings
-//   - Example:
-//     authMiddleware := middleware.AuthMiddleware(middleware.AuthMiddlewareOptions{
-//         Config: config,       // Required
-//         Purpose: "api-access",// Required
-//         ExpiredAllowed: false,
-//     })
+// The package provides a complete JWT implementation with these core operations:
 //
-// 2. Authorization Middleware:
-//   - Hierarchical role-based access control
-//   - Resource path pattern matching
-//   - Integration with user directory services
-//   - Example:
-//     accessMiddleware := middleware.AccessMiddleware(userChecker, accessChecker)
+// 1. Token Creation:
+//    - CreateToken(): Generates new tokens with custom claims
+//    - CreateAndSend(): Combines creation and HTTP transmission
+//    - RefreshToken(): Creates new token with same claims but fresh expiration
 //
-// 3. Security Utilities:
-//   - CORS with safe defaults and custom rules
-//   - CSRF protection via same-site cookies
-//   - Secure context propagation for user IDs and tokens
-//   - Example CORS config:
-//     cors.New(cors.Config{
-//     AllowedOrigins: []string{"https://trusted.com"},
-//     AllowedMethods: []string{"GET", "POST"},
-//     MaxAge: 3600,
-//     })
+// 2. Token Transmission:
+//    - Send(): Sets token in response cookies and headers
 //
-// 4. Account Management:
-//   - Email verification workflows
-//   - Account status checks
-//   - Example:
-//     verifiedMiddleware := middleware.AccountVerifiedMiddleware(userChecker)
+// 3. Token Validation:
+//    - DecodeToken(): Parses token without validation, returning raw claims
+//    - VerifyClaims(): Validates standard claims (issuer, audience, expiration)
+//    - DecodeAndVerify(): Combines decoding and validation in one operation
+//    - ValidateClaimsStructure(): Ensures custom claims match expected structure
+//    - MapClaims(): Converts raw claims to typed structs
+//
+// Example usage:
+//
+//	// Decode and verify in separate steps
+//	claims, err := jwt.DecodeToken(tokenString, &CustomClaims{})
+//	if err != nil {
+//		// handle error
+//	}
+//	err = jwt.VerifyClaims(claims, "example.com", jwt.PurposeLogin)
+//
+//	// Or combined
+//	claims, err := jwt.DecodeAndVerify(tokenString, &CustomClaims{}, "example.com", jwt.PurposeLogin)
+//
+// # Adapter Layer
+//
+// The adapter package provides integration between core services and middleware:
+//
+// - ConfigProvider: Bridges core configuration to auth requirements
+// - APIProvider: Manages API domain information  
+// - CookieSetter: Handles JWT cookie operations across domains
+// - ServiceAdapters:
+//   - coreUserChecker: Adapts core.UserService to auth.UserChecker
+//   - coreAccessChecker: Adapts core.AccessService to auth.AccessChecker
+//
+// Adapters enable the middleware to work with core services while maintaining
+// separation of concerns. Key adapter functions:
+//
+// - NewFromCore(): Creates ConfigProvider from core context
+// - NewUserCheckerFromCore(): Creates UserChecker from core services
+// - NewAccessCheckerFromCore(): Creates AccessChecker from core services
+// - MultiCoreSetterFromCore(): Creates multi-domain CookieSetter
+//
+// # Middleware API
+//
+// The package provides these middleware components:
+//
+// - AuthMiddleware: JWT authentication with purpose validation
+// - AccessMiddleware: Role-based access control  
+// - AccountVerified: Requires verified user accounts
+// - CORS: Cross-Origin Resource Sharing configuration
+//
+// Example middleware chain:
+//
+//	chain := util.New(router).
+//		WithAuth(AuthMiddlewareOptions{
+//			Config: config,
+//			Purpose: "api-access",
+//		}).
+//		WithAccess(userChecker, accessChecker).
+//		WithCORS(cors.Config{...})
 //
 // # Package Structure
 //
 // - /auth: Core authentication types and interfaces
-// - /auth/adapter: Adapters for core services
+// - /auth/adapter: Adapters for core services  
 // - /auth/jwt: JWT token handling utilities
 // - /auth/middleware: HTTP middleware implementations
 // - /auth/validation: Token validation logic
 // - /cors: CORS middleware
-// - /swagger: OpenAPI documentation support
+// - /swagger: OpenAPI documentation support  
 // - /tus: File upload protocol support
 // - /util: Helper utilities
-//
-// # Custom Claims Example
-//
-// Define custom claims type:
-//
-//	type CustomClaims struct {
-//		*gjwt.RegisteredClaims
-//		Role string `json:"role"`
-//	}
-//
-// Create token with custom claims:
-//
-//	token, err := jwt.CreateToken(privateKey, "domain.com", "user123", 
-//		jwt.PurposeLogin, time.Hour,
-//		jwt.WithClaims(&CustomClaims{}),
-//		jwt.WithModifiers(func(claims gjwt.Claims) {
-//			if cc, ok := claims.(*CustomClaims); ok {
-//				cc.Role = "admin"
-//			}
-//		}))
-//
-// Retrieve in handler:
-//
-//	claims, ok := auth.GetClaims[*CustomClaims](r.Context())
-//	if ok {
-//		log.Printf("User role: %s", claims.Role)
-//	}
-//
-// # Example Application Setup
-//
-// Typical middleware chain configuration:
-//
-//	router := http.NewServeMux()
-//	config := adapter.NewFromCore(coreCtx) 
-//
-//	// Build processing chain
-//	chain := util.New(router).
-//		WithAuth(middleware.AuthMiddlewareOptions{
-//			Config: config,
-//			Purpose: "session",
-//		}).
-//		WithCORS(cors.Config{
-//			AllowedOrigins: []string{"https://app.domain.com"},
-//			AllowedHeaders: []string{"Authorization"},
-//		})
-//
-//	// Add Swagger documentation
-//	spec := loadOpenAPISpec() // Implement your spec loader
-//	swaggerHandler := swagger.NewHandler(spec, "/docs")
-//	router.Handle("/docs/", swaggerHandler)
-//
-//	http.ListenAndServe(":8080", chain.Then())
 //
 // # Security Architecture
 //
 // - JWT tokens signed with Ed25519 for performance and security
 // - Strict same-site cookie policies
 // - Type-safe custom claims handling
-// - Audience claim validation for token purpose isolation
+// - Audience claim validation for token purpose isolation  
 // - Contextual user ID injection with type safety
 // - Automatic token revocation detection
 // - HSTS-ready security headers
-//
-// # Error Handling
-//
-// Standard HTTP status codes with structured error responses:
-// - 401 Unauthorized: Authentication failures
-// - 403 Forbidden: Authorization/verification failures
-// - 500 Internal Server Error: Configuration/validation errors
-//
-// # Testing & Validation
-//
-// Package includes:
-//   - Mock implementations for all interfaces
-//   - Integration test helpers
-//   - 100% coverage of security-critical paths
-//   - Example:
-//     go test -v -cover ./...
-//
-// # Maintenance & Extensibility
-//
-// - Semantic versioning with Go module support
-// - Generated documentation via godoc
-// - Plugin architecture for custom validators
-// - Audit logging integration points
+// - Separate token creation and transmission concerns
 package middleware

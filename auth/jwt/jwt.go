@@ -132,14 +132,20 @@ func CreateToken(privateKey ed25519.PrivateKey, domain string, subject string, p
 	return signedToken, nil
 }
 
-// Send creates and sets a JWT token in the HTTP response
-func Send(w http.ResponseWriter, privateKey ed25519.PrivateKey, domain string, cookieName string, subject string, purpose Purpose, expiration time.Duration, opts ...Option) (string, error) {
+// CreateAndSend creates and sets a JWT token in the HTTP response
+func CreateAndSend(w http.ResponseWriter, privateKey ed25519.PrivateKey, domain string, cookieName string, subject string, purpose Purpose, expiration time.Duration, opts ...Option) (string, error) {
 	// Use the exported CreateToken instead of the internal one
 	token, err := CreateToken(privateKey, domain, subject, purpose, expiration, opts...)
 	if err != nil {
 		return "", err
 	}
 
+	Send(w, token, cookieName, domain, expiration)
+
+	return token, nil
+}
+
+func Send(w http.ResponseWriter, token string, cookieName string, domain string, expiration time.Duration) {
 	// Set cookie with the token
 	cookie := &http.Cookie{
 		Name:     cookieName,
@@ -153,11 +159,11 @@ func Send(w http.ResponseWriter, privateKey ed25519.PrivateKey, domain string, c
 	}
 	http.SetCookie(w, cookie)
 
-	return token, nil
+	w.Header().Set("Authorization", "Bearer "+token)
 }
 
 // RefreshToken creates a new token using an existing token's claims
-func RefreshToken(tokenString string, privateKey ed25519.PrivateKey, domain string, expiration time.Duration) (string, error) {
+func RefreshToken(tokenString string, privateKey ed25519.PrivateKey, expiration time.Duration) (string, error) {
 	// Create a parser without claims validation
 	parser := gjwt.NewParser(gjwt.WithoutClaimsValidation())
 

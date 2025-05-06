@@ -93,7 +93,7 @@ func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
 	var lastErr error
 
 	// Set cookie for main domain
-	lastToken, lastErr = jwt.Send(
+	lastToken, lastErr = jwt.CreateAndSend(
 		w,
 		m.Config.GetPrivateKey(),
 		m.Config.GetDomain(),
@@ -107,7 +107,7 @@ func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
 	// Set cookies for all APIs
 	for _, api := range m.APIs.GetAPIs() {
 		// Skip errors but keep them for return value
-		token, err := jwt.Send(
+		token, err := jwt.CreateAndSend(
 			w,
 			m.Config.GetPrivateKey(),
 			api,

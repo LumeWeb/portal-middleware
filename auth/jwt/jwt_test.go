@@ -50,7 +50,7 @@ func TestRefreshJWTToken(t *testing.T) {
 
 	t.Run("valid token refresh", func(t *testing.T) {
 		original, _ := CreateToken(priv, domain, subject, PurposeLogin, time.Minute)
-		refreshed, err := RefreshToken(original, priv, domain, expiration)
+		refreshed, err := RefreshToken(original, priv, expiration)
 		require.NoError(t, err)
 
 		parsed, _ := gjwt.ParseWithClaims(refreshed, &gjwt.RegisteredClaims{}, func(t *gjwt.Token) (interface{}, error) {
@@ -61,7 +61,7 @@ func TestRefreshJWTToken(t *testing.T) {
 	})
 
 	t.Run("invalid token", func(t *testing.T) {
-		_, err := RefreshToken("invalid", priv, domain, expiration)
+		_, err := RefreshToken("invalid", priv, expiration)
 		assert.Error(t, err)
 	})
 }
@@ -74,9 +74,45 @@ func TestSendJWT(t *testing.T) {
 	purpose := PurposeLogin
 	expiration := time.Hour
 
-	t.Run("sets cookie correctly", func(t *testing.T) {
+	t.Run("sets cookie and header correctly", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		token, err := Send(w, priv, domain, cookieName, subject, purpose, expiration)
+		token, err := CreateToken(priv, domain, subject, purpose, expiration)
+		require.NoError(t, err)
+
+		Send(w, token, cookieName, domain, expiration)
+
+		cookies := w.Result().Cookies()
+		require.Len(t, cookies, 1)
+
+		cookie := cookies[0]
+		assert.Equal(t, cookieName, cookie.Name)
+		assert.Equal(t, token, cookie.Value)
+		assert.WithinDuration(t, time.Now().Add(expiration), cookie.Expires, time.Second)
+		assert.Equal(t, "Bearer "+token, w.Header().Get("Authorization"))
+	})
+
+	t.Run("no cookie when name empty", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		token, err := CreateToken(priv, domain, subject, purpose, expiration)
+		require.NoError(t, err)
+
+		Send(w, token, "", domain, expiration)
+		assert.Empty(t, w.Result().Cookies())
+		assert.Equal(t, "Bearer "+token, w.Header().Get("Authorization"))
+	})
+}
+
+func TestCreateAndSendJWT(t *testing.T) {
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	domain := "test.com"
+	cookieName := "auth"
+	subject := "user123"
+	purpose := PurposeLogin
+	expiration := time.Hour
+
+	t.Run("creates and sets cookie correctly", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		token, err := CreateAndSend(w, priv, domain, cookieName, subject, purpose, expiration)
 		require.NoError(t, err)
 
 		cookies := w.Result().Cookies()
@@ -86,13 +122,15 @@ func TestSendJWT(t *testing.T) {
 		assert.Equal(t, cookieName, cookie.Name)
 		assert.Equal(t, token, cookie.Value)
 		assert.WithinDuration(t, time.Now().Add(expiration), cookie.Expires, time.Second)
+		assert.Equal(t, "Bearer "+token, w.Header().Get("Authorization"))
 	})
 
 	t.Run("no cookie when name empty", func(t *testing.T) {
 		w := httptest.NewRecorder()
-		_, err := Send(w, priv, domain, "", subject, purpose, expiration)
+		_, err := CreateAndSend(w, priv, domain, "", subject, purpose, expiration)
 		assert.NoError(t, err)
 		assert.Empty(t, w.Result().Cookies())
+		assert.NotEmpty(t, w.Header().Get("Authorization"))
 	})
 }
 
@@ -109,7 +147,6 @@ func TestCreateJWTTokenWithCustomClaims(t *testing.T) {
 	}
 
 	t.Run("custom claims are preserved", func(t *testing.T) {
-		// Initialize the RegisteredClaims field properly
 		claims := &CustomClaims{
 			RegisteredClaims: &gjwt.RegisteredClaims{
 				Subject:   subject,
@@ -125,7 +162,6 @@ func TestCreateJWTTokenWithCustomClaims(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Parse with custom claims
 		parsed, err := gjwt.ParseWithClaims(token, &CustomClaims{}, func(t *gjwt.Token) (interface{}, error) {
 			return pub, nil
 		})

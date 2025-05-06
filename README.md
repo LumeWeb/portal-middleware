@@ -79,30 +79,61 @@ func main() {
 }
 ```
 
-## Custom Claims Example
+## JWT Token Handling
+
+### Token Validation API
 
 ```go
-type CustomClaims struct {
-	*gjwt.RegisteredClaims
-	Role string `json:"role"`
+// Decode token without validation
+claims, err := jwt.DecodeToken(tokenString, &CustomClaims{})
+if err != nil {
+    // handle error
 }
 
-// Create token
-token, err := jwt.CreateToken(
-	privateKey,
-	"example.com", 
-	"user123",
-	jwt.PurposeLogin,
-	time.Hour,
-	jwt.WithClaims(&CustomClaims{Role: "admin"}),
+// Verify standard claims
+err = jwt.VerifyClaims(claims, "example.com", jwt.PurposeLogin)
+if err != nil {
+    // handle validation error
+}
+
+// Combined decode and verify
+claims, err := jwt.DecodeAndVerify(
+    tokenString,
+    &CustomClaims{},
+    "example.com", 
+    jwt.PurposeLogin,
 )
 
-// Retrieve in handler  
-claims, ok := auth.GetClaims[*CustomClaims](r.Context())
-if ok {
-	log.Printf("User role: %s", claims.Role)
-}
+// Validate custom claims structure
+err = jwt.ValidateClaimsStructure(rawClaims, &CustomClaims{})
+
+// Map raw claims to struct
+err = jwt.MapClaims(rawClaims, &CustomClaims{})
 ```
+
+### Adapter Layer
+
+The adapter package provides integration between core services and middleware:
+
+```go
+// Get config from core context
+config := adapter.NewFromCore(coreCtx)
+
+// Create service adapters 
+userChecker := adapter.NewUserCheckerFromCore(coreCtx)
+accessChecker := adapter.NewAccessCheckerFromCore(coreCtx)
+
+// Multi-domain cookie handling  
+cookieSetter := adapter.MultiCoreSetterFromCore(coreCtx)
+```
+
+Key adapter interfaces:
+
+- `ConfigProvider`: Provides JWT signing keys and domain config
+- `APIProvider`: Manages API domain information
+- `CookieSetter`: Handles JWT cookie operations
+- `UserChecker`: Verifies user account status
+- `AccessChecker`: Checks resource permissions
 
 ## Security Features
 
@@ -112,6 +143,7 @@ if ok {
 - Purpose-specific claim validation
 - Contextual user ID injection
 - Automatic token revocation detection
+- Separate token creation and transmission concerns
 
 ## Testing
 
