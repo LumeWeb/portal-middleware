@@ -160,7 +160,7 @@ func TestMultiCoreSetterFromCore(t *testing.T) {
 
 		// Echo the cookie
 		echoW := httptest.NewRecorder()
-		setter.EchoAuthCookie(echoW, req, ctx)
+		setter.EchoAuthCookie(echoW, req)
 
 		// Verify echoed cookies
 		echoCookies := echoW.Result().Cookies()
@@ -196,7 +196,7 @@ func TestMultiCoreSetterFromCore(t *testing.T) {
 
 		// Echo the cookie
 		echoW := httptest.NewRecorder()
-		setter.EchoAuthCookie(echoW, req, ctx)
+		setter.EchoAuthCookie(echoW, req)
 
 		// Should return error
 		assert.Equal(t, http.StatusInternalServerError, echoW.Code)
@@ -228,7 +228,7 @@ func TestMultiCoreSetterFromCore(t *testing.T) {
 
 		// Echo the cookie
 		echoW := httptest.NewRecorder()
-		domainSetter.EchoAuthCookie(echoW, req, ctx)
+		domainSetter.EchoAuthCookie(echoW, req)
 
 		// Verify only one cookie was echoed
 		echoCookies := echoW.Result().Cookies()
@@ -260,7 +260,7 @@ func TestMultiCoreSetterFromCore(t *testing.T) {
 
 		// Echo the cookie
 		echoW := httptest.NewRecorder()
-		domainSetter.EchoAuthCookie(echoW, req, ctx)
+		domainSetter.EchoAuthCookie(echoW, req)
 
 		// Should not set any cookies
 		assert.Len(t, echoW.Result().Cookies(), 0)

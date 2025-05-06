@@ -12,30 +12,29 @@ import (
 )
 
 func TestCoreConfigProvider(t *testing.T) {
-	// Create test context with configured values
-	ctx := coreTesting.NewTestContext(t)
+	// Create test context
+	testCtx := coreTesting.NewTestContext(t)
 
-	testDomain := "test.example.com"
-
-	cfg := ctx.Config().Config()
-	cfg.Core.Domain = testDomain
-	seedPhrase := wallet.NewSeedPhrase()
-	err := cfg.Core.Identity.DecodeMapstructure(seedPhrase)
-	if err != nil {
-		t.Error(err)
-	}
-
-	testPrivKey := cfg.Core.Identity.PrivateKey()
-
-	// Create provider from core context
-	provider := NewFromCore(ctx).(*coreConfigProvider)
+	// Create provider from context
+	provider := NewFromCore(testCtx).(*coreConfigProvider)
 
 	t.Run("GetPrivateKey returns configured key", func(t *testing.T) {
+		// Setup test identity
+		seedPhrase := wallet.NewSeedPhrase()
+		cfg := testCtx.Config()
+		err := cfg.Update("core.identity", seedPhrase)
+		require.NoError(t, err)
+
+		testPrivKey := cfg.Config().Core.Identity.PrivateKey()
 		key := provider.GetPrivateKey()
 		assert.Equal(t, testPrivKey, key, "Should return configured private key")
 	})
 
 	t.Run("GetDomain returns configured domain", func(t *testing.T) {
+		testDomain := "test.example.com"
+		cfg := testCtx.Config().Config()
+		cfg.Core.Domain = testDomain
+
 		domain := provider.GetDomain()
 		assert.Equal(t, testDomain, domain, "Should return configured domain")
 	})
@@ -50,8 +49,19 @@ func TestCoreConfigProvider(t *testing.T) {
 		assert.Equal(t, core.AUTH_TOKEN_NAME, name, "Should return core AUTH_TOKEN_NAME")
 	})
 
+	t.Run("GetCtx returns original context", func(t *testing.T) {
+		// Create a new test context
+		testCtx := coreTesting.NewTestContext(t)
+
+		// Create provider from the test context
+		provider := NewFromCore(testCtx)
+
+		// Ensure GetCtx returns the same context
+		assert.Same(t, testCtx, provider.GetCtx(), "GetCtx should return the original context used to create the provider")
+	})
+
 	t.Run("implements ConfigProvider interface", func(t *testing.T) {
-		var provider interface{} = NewFromCore(ctx)
+		var provider interface{} = NewFromCore(testCtx)
 		_, ok := provider.(ConfigProvider)
 		require.True(t, ok, "Should implement ConfigProvider interface")
 	})

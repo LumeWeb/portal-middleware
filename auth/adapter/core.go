@@ -13,6 +13,7 @@ type ConfigProvider interface {
 	GetDomain() string
 	GetAuthCookieName() string
 	GetAuthTokenName() string
+	GetCtx() core.Context
 }
 
 // coreConfigProvider bridges the core framework's context with the auth package's ConfigProvider interface.
@@ -54,4 +55,8 @@ func (c *coreConfigProvider) GetAuthCookieName() string {
 // GetAuthTokenName returns the auth token name
 func (c *coreConfigProvider) GetAuthTokenName() string {
 	return core.AUTH_TOKEN_NAME
+}
+
+func (c *coreConfigProvider) GetCtx() core.Context {
+	return c.ctx
 }

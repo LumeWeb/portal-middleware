@@ -1,8 +1,8 @@
 package adapter
 
 import (
-	"crypto/ed25519"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
+	"go.sia.tech/coreutils/wallet"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -14,14 +14,26 @@ import (
 )
 
 func TestCookieSetter(t *testing.T) {
+	ctx := coreTesting.NewTestContext(t)
 	mockConfig := NewMockConfigProvider(t)
-	_, privKey, _ := ed25519.GenerateKey(nil)
+	seedPhrase := wallet.NewSeedPhrase()
 
 	// Setup mock expectations
-	mockConfig.On("GetPrivateKey").Return(privKey)
 	mockConfig.On("GetDomain").Return("test.com")
 	mockConfig.On("GetAuthCookieName").Return("auth_token")
+	mockConfig.On("GetCtx").Return(ctx)
 
+	cfg := ctx.Config()
+	err := cfg.Update("core.domain", "main.example.com")
+	if err != nil {
+		t.Error(err)
+	}
+	err = cfg.Update("core.identity", seedPhrase)
+	if err != nil {
+		t.Error(err)
+	}
+
+	mockConfig.On("GetPrivateKey").Return(ctx.Config().Config().Core.Identity.PrivateKey())
 	setter := NewCookieSetter(mockConfig)
 
 	t.Run("SetJWTCookie sets main cookie", func(t *testing.T) {
@@ -54,10 +66,6 @@ func TestCookieSetter(t *testing.T) {
 	})
 
 	t.Run("EchoAuthCookie echoes valid cookie", func(t *testing.T) {
-		// Create test context
-		ctx := coreTesting.NewTestContext(t)
-		ctx.Config().Config().Core.Domain = "test.com"
-
 		// First set a cookie
 		setW := httptest.NewRecorder()
 		token, err := setter.SetJWTCookie(setW, "user123", jwt.PurposeLogin, time.Hour)
@@ -71,7 +79,7 @@ func TestCookieSetter(t *testing.T) {
 
 		// Echo the cookie
 		echoW := httptest.NewRecorder()
-		setter.EchoAuthCookie(echoW, req, ctx)
+		setter.EchoAuthCookie(echoW, req)
 
 		// Verify echoed cookie
 		echoCookies := echoW.Result().Cookies()
@@ -79,14 +87,10 @@ func TestCookieSetter(t *testing.T) {
 		echoCookie := echoCookies[0]
 		assert.Equal(t, "auth_token", echoCookie.Name)
 		assert.Equal(t, token, echoCookie.Value)
-		assert.Equal(t, "test.com", echoCookie.Domain)
+		assert.Equal(t, "main.example.com", echoCookie.Domain)
 	})
 
 	t.Run("EchoAuthCookie ignores invalid cookie", func(t *testing.T) {
-		// Create test context
-		ctx := coreTesting.NewTestContext(t)
-		ctx.Config().Config().Core.Domain = "test.com"
-
 		// Create request with invalid cookie
 		req := httptest.NewRequest("GET", "/", nil)
 		req.AddCookie(&http.Cookie{
@@ -96,23 +100,19 @@ func TestCookieSetter(t *testing.T) {
 
 		// Echo the cookie
 		echoW := httptest.NewRecorder()
-		setter.EchoAuthCookie(echoW, req, ctx)
+		setter.EchoAuthCookie(echoW, req)
 
 		// Should return error
 		assert.Equal(t, http.StatusInternalServerError, echoW.Code)
 	})
 
 	t.Run("EchoAuthCookie ignores missing cookie", func(t *testing.T) {
-		// Create test context
-		ctx := coreTesting.NewTestContext(t)
-		ctx.Config().Config().Core.Domain = "test.com"
-
 		// Create request without cookie
 		req := httptest.NewRequest("GET", "/", nil)
 
 		// Echo the cookie
 		echoW := httptest.NewRecorder()
-		setter.EchoAuthCookie(echoW, req, ctx)
+		setter.EchoAuthCookie(echoW, req)
 
 		// Should not set any cookies
 		assert.Len(t, echoW.Result().Cookies(), 0)

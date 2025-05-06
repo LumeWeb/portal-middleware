@@ -5,6 +5,8 @@ package adapter
 import (
 	ed25519 "crypto/ed25519"
 
+	core "go.lumeweb.com/portal/core"
+
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -107,6 +109,53 @@ func (_c *MockConfigProvider_GetAuthTokenName_Call) Return(_a0 string) *MockConf
 }
 
 func (_c *MockConfigProvider_GetAuthTokenName_Call) RunAndReturn(run func() string) *MockConfigProvider_GetAuthTokenName_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetCtx provides a mock function with no fields
+func (_m *MockConfigProvider) GetCtx() core.Context {
+	ret := _m.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetCtx")
+	}
+
+	var r0 core.Context
+	if rf, ok := ret.Get(0).(func() core.Context); ok {
+		r0 = rf()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(core.Context)
+		}
+	}
+
+	return r0
+}
+
+// MockConfigProvider_GetCtx_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetCtx'
+type MockConfigProvider_GetCtx_Call struct {
+	*mock.Call
+}
+
+// GetCtx is a helper method to define mock.On call
+func (_e *MockConfigProvider_Expecter) GetCtx() *MockConfigProvider_GetCtx_Call {
+	return &MockConfigProvider_GetCtx_Call{Call: _e.mock.On("GetCtx")}
+}
+
+func (_c *MockConfigProvider_GetCtx_Call) Run(run func()) *MockConfigProvider_GetCtx_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockConfigProvider_GetCtx_Call) Return(_a0 core.Context) *MockConfigProvider_GetCtx_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockConfigProvider_GetCtx_Call) RunAndReturn(run func() core.Context) *MockConfigProvider_GetCtx_Call {
 	_c.Call.Return(run)
 	return _c
 }

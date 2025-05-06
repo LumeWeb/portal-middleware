@@ -122,7 +122,7 @@ func (d *domainCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 	http.SetCookie(w, cookie)
 }
 
-func (d *domainCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, ctx core.Context, opts ...jwt.Option) {
+func (d *domainCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, opts ...jwt.Option) {
 	cookieName := d.base.(*coreCookieSetter).config.GetAuthCookieName()
 
 	// Get the main cookie from the request
@@ -184,9 +184,9 @@ func (c *chainedCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 	}
 }
 
-func (c *chainedCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, ctx core.Context, opts ...jwt.Option) {
+func (c *chainedCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, opts ...jwt.Option) {
 	// Call EchoAuthCookie on all setters, not just the first
 	for _, setter := range c.setters {
-		setter.EchoAuthCookie(w, r, ctx, opts...)
+		setter.EchoAuthCookie(w, r, opts...)
 	}
 }

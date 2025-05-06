@@ -57,6 +57,55 @@ func (_c *MockCookieSetter_ClearJWTCookie_Call) RunAndReturn(run func(http.Respo
 	return _c
 }
 
+// EchoAuthCookie provides a mock function with given fields: w, r, opts
+func (_m *MockCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, opts ...jwt.Option) {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, w, r)
+	_ca = append(_ca, _va...)
+	_m.Called(_ca...)
+}
+
+// MockCookieSetter_EchoAuthCookie_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EchoAuthCookie'
+type MockCookieSetter_EchoAuthCookie_Call struct {
+	*mock.Call
+}
+
+// EchoAuthCookie is a helper method to define mock.On call
+//   - w http.ResponseWriter
+//   - r *http.Request
+//   - opts ...jwt.Option
+func (_e *MockCookieSetter_Expecter) EchoAuthCookie(w interface{}, r interface{}, opts ...interface{}) *MockCookieSetter_EchoAuthCookie_Call {
+	return &MockCookieSetter_EchoAuthCookie_Call{Call: _e.mock.On("EchoAuthCookie",
+		append([]interface{}{w, r}, opts...)...)}
+}
+
+func (_c *MockCookieSetter_EchoAuthCookie_Call) Run(run func(w http.ResponseWriter, r *http.Request, opts ...jwt.Option)) *MockCookieSetter_EchoAuthCookie_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]jwt.Option, len(args)-2)
+		for i, a := range args[2:] {
+			if a != nil {
+				variadicArgs[i] = a.(jwt.Option)
+			}
+		}
+		run(args[0].(http.ResponseWriter), args[1].(*http.Request), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockCookieSetter_EchoAuthCookie_Call) Return() *MockCookieSetter_EchoAuthCookie_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockCookieSetter_EchoAuthCookie_Call) RunAndReturn(run func(http.ResponseWriter, *http.Request, ...jwt.Option)) *MockCookieSetter_EchoAuthCookie_Call {
+	_c.Run(run)
+	return _c
+}
+
 // SetJWTCookie provides a mock function with given fields: w, subject, purpose, expiry, opts
 func (_m *MockCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.Purpose, expiry time.Duration, opts ...jwt.Option) (string, error) {
 	_va := make([]interface{}, len(opts))
