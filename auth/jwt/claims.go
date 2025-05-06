@@ -9,6 +9,8 @@ import (
 	"strings"
 )
 
+type RegisteredClaims = gjwt.RegisteredClaims
+
 // ValidateClaimsStructure validates that raw JWT claims match the expected struct
 func ValidateClaimsStructure(rawClaims gjwt.MapClaims, expected interface{}) error {
 	if expected == nil {
