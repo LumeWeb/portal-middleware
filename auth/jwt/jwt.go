@@ -146,6 +146,11 @@ func CreateAndSend(w http.ResponseWriter, privateKey ed25519.PrivateKey, domain 
 }
 
 func Send(w http.ResponseWriter, token string, cookieName string, domain string, expiration time.Duration) {
+	SendCookie(w, token, cookieName, domain, expiration)
+	SendHeader(w, token)
+}
+
+func SendCookie(w http.ResponseWriter, token string, cookieName string, domain string, expiration time.Duration) {
 	// Set cookie with the token
 	cookie := &http.Cookie{
 		Name:     cookieName,
@@ -158,7 +163,9 @@ func Send(w http.ResponseWriter, token string, cookieName string, domain string,
 		SameSite: http.SameSiteStrictMode,
 	}
 	http.SetCookie(w, cookie)
+}
 
+func SendHeader(w http.ResponseWriter, token string) {
 	w.Header().Set("Authorization", "Bearer "+token)
 }
 
