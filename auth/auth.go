@@ -52,7 +52,7 @@ func IsValidJWT(tokenString string, secretKey ed25519.PrivateKey) bool {
 	return token.Valid
 }
 
-func FindAuthToken(r *http.Request, secretKey ed25519.PrivateKey, domain string, cookieName string, queryParam string) string {
+func FindAuthToken(r *http.Request, secretKey ed25519.PrivateKey, cookieName string, queryParam string) string {
 	// Check Authorization header first
 	if token := ParseAuthTokenHeader(r.Header); token != "" {
 		if IsValidJWT(token, secretKey) {

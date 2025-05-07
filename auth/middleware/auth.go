@@ -43,7 +43,7 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			authToken := auth.ParseAuthToken(r)
+			authToken := auth.FindAuthToken(r, options.Config.GetPrivateKey(), options.Config.GetAuthCookieName(), options.Config.GetAuthTokenName())
 			if authToken == "" {
 				if !options.EmptyAllowed {
 					http.Error(w, "Missing token", http.StatusUnauthorized)
