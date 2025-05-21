@@ -13,6 +13,29 @@ import (
 func TestDecodeToken(t *testing.T) {
 	_, privKey, _ := ed25519.GenerateKey(nil)
 
+	t.Run("non-pointer claims type is auto-converted", func(t *testing.T) {
+		claims := TestClaims{
+			RegisteredClaims: &gjwt.RegisteredClaims{
+				Subject: "123",
+			},
+			CustomField: "test",
+			OtherField:  42,
+		}
+
+		token, err := CreateToken(privKey, "example.com", "123", PurposeLogin, time.Hour, WithClaims(&claims))
+		require.NoError(t, err)
+
+		// Pass non-pointer claims type
+		decoded, err := DecodeToken(token, TestClaims{})
+		require.NoError(t, err)
+
+		decodedClaims, ok := decoded.(*TestClaims)
+		require.True(t, ok)
+		assert.Equal(t, "123", decodedClaims.Subject)
+		assert.Equal(t, "test", decodedClaims.CustomField)
+		assert.Equal(t, 42, decodedClaims.OtherField)
+	})
+
 	t.Run("valid token with custom claims", func(t *testing.T) {
 		claims := &TestClaims{
 			RegisteredClaims: &gjwt.RegisteredClaims{

@@ -14,6 +14,15 @@ func DecodeToken(tokenString string, claimsType gjwt.Claims) (gjwt.Claims, error
 		return nil, errors.New("claims type cannot be nil")
 	}
 
+	// Ensure we have a pointer to decode into
+	claimsValue := reflect.ValueOf(claimsType)
+	if claimsValue.Kind() != reflect.Ptr {
+		// Create new pointer of same type
+		ptrType := reflect.PtrTo(reflect.TypeOf(claimsType))
+		newPtr := reflect.New(ptrType.Elem())
+		claimsType = newPtr.Interface().(gjwt.Claims)
+	}
+
 	// Create a new parser without claims validation
 	parser := gjwt.NewParser(gjwt.WithoutClaimsValidation())
 
