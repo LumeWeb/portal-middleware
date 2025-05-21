@@ -29,8 +29,7 @@ var (
 // - bool: True if account exists
 // - error: Any error encountered during the check
 func (c *coreUserChecker) AccountExists(userID uint) (bool, error) {
-	conditions := map[string]any{"id": userID}
-	exists, _, err := c.userService.Exists(nil, conditions)
+	exists, _, err := c.userService.AccountExists(userID)
 	return exists, err
 }
 
