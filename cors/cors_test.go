@@ -3,8 +3,186 @@ package cors
 import (
 	"net/http"
 	"net/http/httptest"
+	"sort"
+	"strings"
 	"testing"
 )
+
+// sortCommaSeparated sorts a comma-separated string lexicographically
+func sortCommaSeparated(s string) string {
+	if s == "" {
+		return ""
+	}
+	parts := strings.Split(s, ",")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, ", ")
+}
+
+func TestNewWithDefaults(t *testing.T) {
+	tests := []struct {
+		name   string
+		config Config
+		want   Config
+	}{
+		{
+			name:   "empty config gets defaults",
+			config: Config{},
+			want: Config{
+				AllowOrigins:   []string{"*"},
+				AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+				AllowedHeaders: []string{"Content-Type", "Authorization"},
+				MaxAge:         300,
+			},
+		},
+		{
+			name: "partial config merges with defaults",
+			config: Config{
+				AllowedHeaders: []string{"X-Custom"},
+			},
+			want: Config{
+				AllowOrigins:   []string{"*"},
+				AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+				AllowedHeaders: []string{"X-Custom"},
+				MaxAge:         300,
+			},
+		},
+		{
+			name: "full config overrides defaults",
+			config: Config{
+				AllowOrigins:   []string{"https://example.com"},
+				AllowedMethods: []string{"GET"},
+				AllowedHeaders: []string{"X-Custom"},
+				MaxAge:         100,
+			},
+			want: Config{
+				AllowOrigins:   []string{"https://example.com"},
+				AllowedMethods: []string{"GET"},
+				AllowedHeaders: []string{"X-Custom"},
+				MaxAge:         100,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// We can't directly inspect the cors handler, so we'll test it by making requests
+			handler := NewWithDefaults(tt.config)
+
+			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+			wrapped := handler(testHandler)
+
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Set("Origin", "https://test.com")
+			rr := httptest.NewRecorder()
+			wrapped.ServeHTTP(rr, req)
+
+			// Check that Allow-Origin is set according to our expectations
+			gotOrigin := rr.Header().Get("Access-Control-Allow-Origin")
+			if len(tt.want.AllowOrigins) > 0 && tt.want.AllowOrigins[0] == "*" {
+				// Wildcard origin should echo the request origin
+				if gotOrigin != "https://test.com" {
+					t.Errorf("Expected wildcard origin to echo request origin, got %q", gotOrigin)
+				}
+			} else if len(tt.want.AllowOrigins) > 0 {
+				// For specific allowed origins, check if request origin is allowed
+				requestOrigin := req.Header.Get("Origin")
+				originAllowed := false
+				for _, allowedOrigin := range tt.want.AllowOrigins {
+					if requestOrigin == allowedOrigin {
+						originAllowed = true
+						break
+					}
+				}
+
+				if originAllowed {
+					// Request origin is allowed - should be in response
+					if gotOrigin != requestOrigin {
+						t.Errorf("Expected origin %q, got %q", requestOrigin, gotOrigin)
+					}
+				} else {
+					// Request origin not allowed - should be empty
+					if gotOrigin != "" {
+						t.Errorf("Expected empty origin header for disallowed origin %q, got %q", requestOrigin, gotOrigin)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestNewWithTUSDefaults(t *testing.T) {
+	handler := NewWithTUSDefaults()
+	testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})
+	wrapped := handler(testHandler)
+
+	tests := []struct {
+		name           string
+		requestHeaders map[string]string
+		method         string
+		wantHeaders    map[string]string
+	}{
+		{
+			name: "TUS headers allowed",
+			requestHeaders: map[string]string{
+				"Origin":                         "https://example.com",
+				"Access-Control-Request-Method":  "PATCH",
+				"Access-Control-Request-Headers": "upload-offset,tus-resumable",
+			},
+			method: "OPTIONS",
+			wantHeaders: map[string]string{
+				"Access-Control-Allow-Origin":      "https://example.com",
+				"Access-Control-Allow-Credentials": "true",
+				"Access-Control-Allow-Methods":     "PATCH", // Only echoes requested method
+				"Access-Control-Allow-Headers":     "tus-resumable, upload-offset", // Only echoes requested headers
+			},
+		},
+		{
+			name: "TUS headers exposed",
+			requestHeaders: map[string]string{
+				"Origin": "https://example.com",
+			},
+			method: "GET",
+			wantHeaders: map[string]string{
+				"Access-Control-Expose-Headers": "Tus-Resumable, Upload-Length, Upload-Metadata, Upload-Offset, Location",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(tt.method, "/", nil)
+			for k, v := range tt.requestHeaders {
+				if k == "Access-Control-Request-Headers" {
+					// Sort the headers lexicographically before setting them
+					v = sortCommaSeparated(v)
+				}
+				req.Header.Set(k, v)
+			}
+			rr := httptest.NewRecorder()
+			wrapped.ServeHTTP(rr, req)
+
+			// Sort and compare headers to avoid order sensitivity
+			for header, wantValue := range tt.wantHeaders {
+				gotValue := rr.Header().Get(header)
+				if gotValue == "" && wantValue == "" {
+					continue
+				}
+				
+				// Split and sort both values for comparison
+				gotSorted := sortCommaSeparated(gotValue)
+				wantSorted := sortCommaSeparated(wantValue)
+				
+				if gotSorted != wantSorted {
+					t.Errorf("Header %s: got %q (sorted: %q), want %q (sorted: %q)", 
+						header, gotValue, gotSorted, wantValue, wantSorted)
+				}
+			}
+		})
+	}
+}
 
 func TestCORSHandler(t *testing.T) {
 	tests := []struct {
