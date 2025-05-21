@@ -33,8 +33,9 @@ func TestNewWithDefaults(t *testing.T) {
 			want: Config{
 				AllowOrigins:   []string{"*"},
 				AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-				AllowedHeaders: []string{"Content-Type", "Authorization"},
-				MaxAge:         300,
+				AllowedHeaders:   []string{"Content-Type", "Authorization"},
+				MaxAge:          300,
+				AllowCredentials: true,
 			},
 		},
 		{
@@ -45,8 +46,9 @@ func TestNewWithDefaults(t *testing.T) {
 			want: Config{
 				AllowOrigins:   []string{"*"},
 				AllowedMethods: []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-				AllowedHeaders: []string{"X-Custom"},
-				MaxAge:         300,
+				AllowedHeaders:   []string{"X-Custom"},
+				MaxAge:          300,
+				AllowCredentials: true,
 			},
 		},
 		{
@@ -58,10 +60,11 @@ func TestNewWithDefaults(t *testing.T) {
 				MaxAge:         100,
 			},
 			want: Config{
-				AllowOrigins:   []string{"https://example.com"},
-				AllowedMethods: []string{"GET"},
-				AllowedHeaders: []string{"X-Custom"},
-				MaxAge:         100,
+				AllowOrigins:     []string{"https://example.com"},
+				AllowedMethods:   []string{"GET"},
+				AllowedHeaders:   []string{"X-Custom"},
+				MaxAge:          100,
+				AllowCredentials: false, // Explicit false in config should override defaults
 			},
 		},
 	}
@@ -79,8 +82,20 @@ func TestNewWithDefaults(t *testing.T) {
 			rr := httptest.NewRecorder()
 			wrapped.ServeHTTP(rr, req)
 
-			// Check that Allow-Origin is set according to our expectations
+			// Check CORS headers
 			gotOrigin := rr.Header().Get("Access-Control-Allow-Origin")
+			gotCredentials := rr.Header().Get("Access-Control-Allow-Credentials")
+			
+			// Verify credentials header matches expected config
+			if tt.want.AllowCredentials {
+				if gotCredentials != "true" {
+					t.Errorf("Expected Access-Control-Allow-Credentials to be 'true', got %q", gotCredentials)
+				}
+			} else {
+				if gotCredentials != "" {
+					t.Errorf("Expected no Access-Control-Allow-Credentials header, got %q", gotCredentials)
+				}
+			}
 			if len(tt.want.AllowOrigins) > 0 && tt.want.AllowOrigins[0] == "*" {
 				// Wildcard origin should echo the request origin
 				if gotOrigin != "https://test.com" {

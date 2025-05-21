@@ -78,6 +78,8 @@ func NewWithDefaults(config Config) func(http.Handler) http.Handler {
 		config.MaxAge = 300
 	}
 
+	config.AllowCredentials = true
+
 	return New(config)
 }
 
