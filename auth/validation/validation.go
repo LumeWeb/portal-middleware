@@ -27,15 +27,15 @@ var (
 // Implementations should verify token signatures and audience/purpose claims.
 type TokenValidator interface {
 	Validate(token string, purpose jwt.Purpose) (*gjwt.RegisteredClaims, error)
-	ValidateWithClaims(token string, purpose jwt.Purpose) (*gjwt.RegisteredClaims, gjwt.Claims, error)
+	ValidateWithClaims(token string, purpose jwt.Purpose, claimsType gjwt.Claims) (*gjwt.RegisteredClaims, gjwt.Claims, error)
 }
 
 func (v *jwtValidator) Validate(token string, purpose jwt.Purpose) (*gjwt.RegisteredClaims, error) {
-	claims, _, err := v.ValidateWithClaims(token, purpose)
+	claims, _, err := v.ValidateWithClaims(token, purpose, &gjwt.RegisteredClaims{})
 	return claims, err
 }
 
-func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.Purpose) (*gjwt.RegisteredClaims, gjwt.Claims, error) {
+func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.Purpose, claimsType gjwt.Claims) (*gjwt.RegisteredClaims, gjwt.Claims, error) {
 	domain := v.config.GetDomain()
 
 	// 1. First parse without validation to get raw claims
@@ -50,13 +50,16 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.Purpose) (*g
 		return nil, nil, jwt.ErrJWTInvalid
 	}
 
-	// 2. Process options to determine expected claims type
-	expectedClaims := jwt.GetClaimsType(v.options)
-	expectedClaimsType := reflect.TypeOf(expectedClaims).Elem()
+	// Handle nil claimsType by defaulting to RegisteredClaims
+	if claimsType == nil {
+		claimsType = &gjwt.RegisteredClaims{}
+	}
 
-	// 3. If custom claims expected, validate their presence and structure
-	var customClaims gjwt.Claims
-	if expectedClaimsType != nil {
+	// Create new instance of the expected claims type
+	customClaims := reflect.New(reflect.TypeOf(claimsType).Elem()).Interface().(gjwt.Claims)
+
+	// Only validate custom claims structure if we expect custom claims
+	if _, isStandard := claimsType.(*gjwt.RegisteredClaims); !isStandard {
 		// Check if token actually contains any custom claims
 		hasCustomClaims := false
 		for claim := range rawClaims {
@@ -73,17 +76,14 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.Purpose) (*g
 			return nil, nil, jwt.ErrJWTUnexpectedClaimsType
 		}
 
-		// Create new instance of expected type
-		customClaims = reflect.New(expectedClaimsType).Interface().(gjwt.Claims)
-
-		// Validate and map claims using shared validation logic
 		if err := jwt.ValidateClaimsStructure(rawClaims, customClaims); err != nil {
 			return nil, nil, err
 		}
+	}
 
-		if err := jwt.MapClaims(rawClaims, customClaims); err != nil {
-			return nil, nil, err
-		}
+	// Map all claims (both standard and custom)
+	if err := jwt.MapClaims(rawClaims, customClaims); err != nil {
+		return nil, nil, err
 	}
 
 	// 4. Now parse with full validation
@@ -111,11 +111,14 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.Purpose) (*g
 		if getter, ok := c.(interface{ GetRegisteredClaims() *gjwt.RegisteredClaims }); ok {
 			baseClaims = getter.GetRegisteredClaims()
 		} else {
-			// For custom claims without RegisteredClaims, create minimal claims
+			// For custom claims without RegisteredClaims, try to map standard claims
 			baseClaims = &gjwt.RegisteredClaims{}
-			if err := mapStandardClaims(rawClaims, baseClaims); err != nil {
-				return nil, nil, jwt.ErrJWTInvalid
+			if err := mapStandardClaims(rawClaims, baseClaims); err == nil {
+				// If we successfully mapped standard claims, use them
+				return baseClaims, c, nil
 			}
+			// Otherwise return empty base claims
+			return &gjwt.RegisteredClaims{}, c, nil
 		}
 	}
 
@@ -126,7 +129,8 @@ func (v *jwtValidator) ValidateWithClaims(token string, purpose jwt.Purpose) (*g
 			return nil, nil, jwt.ErrJWTInvalid
 		}
 
-		if !(len(aud) == 0 && expectedClaimsType != nil) {
+		// Only validate audience if we have standard claims or custom claims with audience
+		if _, isStandard := claimsType.(*gjwt.RegisteredClaims); !isStandard || len(aud) > 0 {
 			if !jwt.PurposeEqual(aud, purpose) {
 				return nil, nil, jwt.ErrJWTInvalid
 			}

@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
-	"fmt"
+	"github.com/stretchr/testify/mock"
 	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal-middleware/auth/adapter"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
@@ -20,32 +20,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type CustomClaims struct {
+	*gjwt.RegisteredClaims
+	Role string `json:"role"`
+}
+
 func TestAuthMiddleware(t *testing.T) {
 	mockConfig := adapter.NewMockConfigProvider(t)
 	mockValidator := validation.NewMockTokenValidator(t)
+	mockConfig.On("GetPrivateKey").Return(ed25519.PrivateKey{}).Maybe()
+	mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
 
 	// Setup mock config to return a valid private key
 	_, privKey, _ := ed25519.GenerateKey(nil)
-	mockConfig.On("GetPrivateKey").Return(privKey)
-	mockConfig.On("GetDomain").Return("example.com")
-	mockConfig.On("GetAuthCookieName").Return("auth_cookie")
+	mockConfig.On("GetPrivateKey").Return(privKey).Maybe()
+	mockConfig.On("GetDomain").Return("example.com").Maybe()
+	mockConfig.On("GetAuthCookieName").Return("auth_cookie").Maybe()
+	mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
 
 	t.Run("valid token", func(t *testing.T) {
-
-		rr := httptest.NewRecorder()
-		cookieSetter := adapter.NewCookieSetter(mockConfig)
-
-		cookie, err := cookieSetter.SetJWTCookie(rr, "0", jwt.PurposeLogin, time.Hour)
-		if err != nil {
-			t.Error(err)
-		}
-
-		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cookie))
-
-		// Setup validator mock to return expected claims
-		mockValidator.On("ValidateWithClaims", cookie, jwt.PurposeLogin).
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, (*gjwt.RegisteredClaims)(nil), nil)
+		// Setup validator mock first
+		mockValidator.On("ValidateWithClaims", mock.Anything, jwt.PurposeLogin, &gjwt.RegisteredClaims{}).
+			Return(&gjwt.RegisteredClaims{Subject: "123"}, (*gjwt.RegisteredClaims)(nil), nil).Once()
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:       mockConfig,
@@ -53,6 +49,10 @@ func TestAuthMiddleware(t *testing.T) {
 			Purpose:      jwt.PurposeLogin,
 			EmptyAllowed: false,
 		})
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", "Bearer valid.token")
 
 		// Custom handler to verify context values
 		handlerCalled := false
@@ -67,7 +67,7 @@ func TestAuthMiddleware(t *testing.T) {
 			// Verify auth token was set in context
 			authToken, err := mcontext.GetAuthToken(r.Context())
 			assert.NoError(t, err)
-			assert.Equal(t, cookie, authToken)
+			assert.Equal(t, "valid.token", authToken)
 
 			w.WriteHeader(http.StatusOK)
 		})
@@ -85,7 +85,7 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer invalid.token")
 
-		mockValidator.On("ValidateWithClaims", "invalid.token", jwt.PurposeLogin).
+		mockValidator.On("ValidateWithClaims", "invalid.token", jwt.PurposeLogin, &gjwt.RegisteredClaims{}).
 			Return(nil, nil, jwt.ErrJWTInvalid)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
@@ -105,7 +105,7 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer expired.token")
 
-		mockValidator.On("ValidateWithClaims", "expired.token", jwt.PurposeLogin).
+		mockValidator.On("ValidateWithClaims", "expired.token", jwt.PurposeLogin, &gjwt.RegisteredClaims{}).
 			Return(&gjwt.RegisteredClaims{Subject: "123"}, (*gjwt.RegisteredClaims)(nil), gjwt.ErrTokenExpired)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
@@ -127,7 +127,7 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer wrong.purpose.token")
 
-		mockValidator.On("ValidateWithClaims", "wrong.purpose.token", jwt.PurposeLogin).
+		mockValidator.On("ValidateWithClaims", "wrong.purpose.token", jwt.PurposeLogin, &gjwt.RegisteredClaims{}).
 			Return(nil, nil, jwt.ErrJWTInvalid)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
@@ -149,32 +149,30 @@ func TestAuthMiddleware(t *testing.T) {
 			CustomField string `json:"custom_field"`
 		}
 
-		tokenString, err := jwt.CreateToken(privKey, "test.com", "user123",
-			jwt.Purpose("test_purpose"), time.Hour,
-			jwt.WithClaims(&CustomClaims{}),
-			jwt.WithModifiers(func(claims gjwt.Claims) {
-				if cc, ok := claims.(*CustomClaims); ok {
-					cc.CustomField = "test_value"
-				}
-			}))
-		require.NoError(t, err)
+		// Setup mock config expectations
+		mockConfig.On("GetPrivateKey").Return(privKey).Maybe()
+		mockConfig.On("GetAuthCookieName").Return("auth_cookie").Maybe()
+		mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
 
-		req := httptest.NewRequest("GET", "/", nil)
-		req.Header.Set("Authorization", "Bearer "+tokenString)
-
-		mockValidator.On("ValidateWithClaims", tokenString, jwt.Purpose("test_purpose")).
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, &CustomClaims{
-				RegisteredClaims: &gjwt.RegisteredClaims{Subject: "123"},
-				CustomField:      "test_value",
-			}, nil)
+		// Setup validator mock with correct claims type
+		expectedClaims := &CustomClaims{
+			RegisteredClaims: &gjwt.RegisteredClaims{Subject: "123"},
+			CustomField:      "test_value",
+		}
+		mockValidator.On("ValidateWithClaims", "valid.token", jwt.Purpose("test_purpose"), &CustomClaims{}).
+			Return(expectedClaims.RegisteredClaims, expectedClaims, nil).Once()
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
-			Config:       mockConfig,
-			Validator:    mockValidator,
-			Purpose:      jwt.Purpose("test_purpose"),
-			EmptyAllowed: false,
-			Options:      jwt.Options(jwt.WithClaims(&CustomClaims{})),
+			Config:         mockConfig,
+			Validator:      mockValidator,
+			Purpose:        jwt.Purpose("test_purpose"),
+			EmptyAllowed:   false,
+			Options:        jwt.Options(jwt.WithClaims(&CustomClaims{})),
+			ExpectedClaims: &CustomClaims{},
 		})
+
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", "Bearer valid.token")
 
 		rr := httptest.NewRecorder()
 		customHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -187,6 +185,7 @@ func TestAuthMiddleware(t *testing.T) {
 		handler.ServeHTTP(rr, req)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
+		mockValidator.AssertExpectations(t)
 	})
 
 	t.Run("missing config panics", func(t *testing.T) {
@@ -215,6 +214,94 @@ func TestAuthMiddleware(t *testing.T) {
 		AuthMiddleware(AuthMiddlewareOptions{
 			Config: mockConfig,
 		})
+	})
+}
+
+func TestAuthMiddleware_DefaultRegisteredClaims(t *testing.T) {
+	mockConfig := adapter.NewMockConfigProvider(t)
+	_, privKey, _ := ed25519.GenerateKey(nil)
+	mockConfig.On("GetPrivateKey").Return(privKey).Maybe()
+	mockConfig.On("GetDomain").Return("test.com").Maybe()
+	mockConfig.On("GetAuthCookieName").Return("auth_cookie").Maybe()
+	mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
+	mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
+
+	t.Run("valid token with only standard claims", func(t *testing.T) {
+		mockValidator := validation.NewMockTokenValidator(t)
+
+		validToken, err := jwt.CreateToken(privKey, "test.com", "123", jwt.PurposeLogin, time.Hour)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", "Bearer "+validToken)
+
+		baseClaims := &gjwt.RegisteredClaims{Subject: "123"}
+		mockValidator.On("ValidateWithClaims", validToken, jwt.PurposeLogin, &gjwt.RegisteredClaims{}).
+			Return(baseClaims, nil, nil)
+
+		middleware := AuthMiddleware(AuthMiddlewareOptions{
+			Config:         mockConfig,
+			Validator:      mockValidator,
+			Purpose:        jwt.PurposeLogin,
+			ExpectedClaims: nil, // No expected claims specified
+		})
+
+		rr := httptest.NewRecorder()
+		handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Should be able to get base claims
+			claims, ok := auth.GetClaims[*gjwt.RegisteredClaims](r.Context())
+			assert.True(t, ok)
+			assert.Equal(t, "123", claims.Subject)
+			w.WriteHeader(http.StatusOK)
+		}))
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		mockValidator.AssertExpectations(t)
+	})
+
+	t.Run("token with custom claims when only standard claims expected", func(t *testing.T) {
+		mockValidator := validation.NewMockTokenValidator(t)
+
+		// Create token with custom claims
+		validToken, err := jwt.CreateToken(privKey, "test.com", "123", jwt.PurposeLogin, time.Hour,
+			jwt.WithClaims(&CustomClaims{
+				RegisteredClaims: &gjwt.RegisteredClaims{},
+				Role:             "admin",
+			}),
+		)
+		require.NoError(t, err)
+
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Authorization", "Bearer "+validToken)
+
+		baseClaims := &gjwt.RegisteredClaims{Subject: "123"}
+		mockValidator.On("ValidateWithClaims", validToken, jwt.PurposeLogin, &gjwt.RegisteredClaims{}).
+			Return(baseClaims, nil, nil) // Validator should ignore custom claims
+
+		middleware := AuthMiddleware(AuthMiddlewareOptions{
+			Config:         mockConfig,
+			Validator:      mockValidator,
+			Purpose:        jwt.PurposeLogin,
+			ExpectedClaims: nil, // No expected claims specified
+		})
+
+		rr := httptest.NewRecorder()
+		handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Should only get base claims
+			claims, ok := auth.GetClaims[*gjwt.RegisteredClaims](r.Context())
+			assert.True(t, ok)
+			assert.Equal(t, "123", claims.Subject)
+
+			// Should not get custom claims
+			_, ok = auth.GetClaims[*CustomClaims](r.Context())
+			assert.False(t, ok)
+			w.WriteHeader(http.StatusOK)
+		}))
+		handler.ServeHTTP(rr, req)
+
+		assert.Equal(t, http.StatusOK, rr.Code)
+		mockValidator.AssertExpectations(t)
 	})
 }
 
@@ -249,14 +336,25 @@ func TestAuthMiddleware_CustomClaims(t *testing.T) {
 		// Setup fresh expectations
 		baseClaims := &gjwt.RegisteredClaims{Subject: "123"}
 		customClaims := &CustomClaims{Role: "admin"}
-		mockValidator.On("ValidateWithClaims", validToken, jwt.PurposeLogin).
-			Return(baseClaims, customClaims, nil)
+		// Setup mock config expectations
+		mockConfig.On("GetPrivateKey").Return(privKey).Maybe()
+		mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
+
+		// Setup mock config expectations
+		mockConfig.On("GetPrivateKey").Return(privKey).Maybe()
+		mockConfig.On("GetAuthCookieName").Return("auth_cookie").Maybe()
+		mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
+
+		// Setup validator mock with correct claims type
+		mockValidator.On("ValidateWithClaims", validToken, jwt.PurposeLogin, &CustomClaims{}).
+			Return(baseClaims, customClaims, nil).Once()
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
-			Config:    mockConfig,
-			Validator: mockValidator,
-			Purpose:   jwt.PurposeLogin,
-			Options:   jwt.Options(jwt.WithClaims(&CustomClaims{})),
+			Config:         mockConfig,
+			Validator:      mockValidator,
+			Purpose:        jwt.PurposeLogin,
+			Options:        jwt.Options(jwt.WithClaims(&CustomClaims{})),
+			ExpectedClaims: &CustomClaims{},
 		})
 
 		rr := httptest.NewRecorder()
@@ -288,16 +386,17 @@ func TestAuthMiddleware_CustomClaims(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer "+validToken)
 
-		// Setup fresh expectations with different return type
+		// Setup fresh expectations with correct claims type
 		baseClaims := &gjwt.RegisteredClaims{Subject: "123"}
-		mockValidator.On("ValidateWithClaims", validToken, jwt.PurposeLogin).
+		mockValidator.On("ValidateWithClaims", validToken, jwt.PurposeLogin, &CustomClaims{}).
 			Return(baseClaims, &gjwt.RegisteredClaims{}, nil)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
-			Config:    mockConfig,
-			Validator: mockValidator,
-			Purpose:   jwt.PurposeLogin,
-			Options:   jwt.Options(jwt.WithClaims(&CustomClaims{})),
+			Config:         mockConfig,
+			Validator:      mockValidator,
+			Purpose:        jwt.PurposeLogin,
+			Options:        jwt.Options(jwt.WithClaims(&CustomClaims{})),
+			ExpectedClaims: &CustomClaims{},
 		})
 
 		rr := httptest.NewRecorder()
@@ -325,14 +424,27 @@ func TestAuthMiddleware_ValidationErrors(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer invalid.token")
 
-		mockValidator.On("ValidateWithClaims", "invalid.token", jwt.PurposeLogin).
+		// Setup mock config expectations
+		mockConfig.On("GetPrivateKey").Return(ed25519.PrivateKey{}).Maybe()
+		mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
+
+		// Setup validator mock
+		// Setup mock config expectations
+		mockConfig.On("GetPrivateKey").Return(ed25519.PrivateKey{}).Maybe()
+		mockConfig.On("GetAuthCookieName").Return("auth_cookie").Maybe()
+		mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
+
+		// Setup validator mock
+		// Setup mock to expect CustomClaims type
+		mockValidator.On("ValidateWithClaims", "invalid.token", jwt.PurposeLogin, &CustomClaims{}).
 			Return(nil, nil, jwt.ErrJWTInvalid)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
-			Config:    mockConfig,
-			Validator: mockValidator,
-			Purpose:   jwt.PurposeLogin,
-			Options:   jwt.Options(jwt.WithClaims(&CustomClaims{})),
+			Config:         mockConfig,
+			Validator:      mockValidator,
+			Purpose:        jwt.PurposeLogin,
+			Options:        jwt.Options(jwt.WithClaims(&CustomClaims{})),
+			ExpectedClaims: &CustomClaims{},
 		})
 
 		rr := httptest.NewRecorder()
@@ -346,14 +458,16 @@ func TestAuthMiddleware_ValidationErrors(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer malformed.token")
 
-		mockValidator.On("ValidateWithClaims", "malformed.token", jwt.PurposeLogin).
-			Return(&gjwt.RegisteredClaims{}, nil, errors.New("malformed claims"))
+		// Setup mock to expect CustomClaims type
+		mockValidator.On("ValidateWithClaims", "malformed.token", jwt.PurposeLogin, &CustomClaims{}).
+			Return(nil, nil, errors.New("malformed claims")).Once()
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
-			Config:    mockConfig,
-			Validator: mockValidator,
-			Purpose:   jwt.PurposeLogin,
-			Options:   jwt.Options(jwt.WithClaims(&CustomClaims{})),
+			Config:         mockConfig,
+			Validator:      mockValidator,
+			Purpose:        jwt.PurposeLogin,
+			Options:        jwt.Options(jwt.WithClaims(&CustomClaims{})),
+			ExpectedClaims: &CustomClaims{},
 		})
 
 		rr := httptest.NewRecorder()

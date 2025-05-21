@@ -66,6 +66,88 @@ func (c *CustomClaims) SetAudience(audience []string) {
 	c.GetRegisteredClaims().Audience = audience
 }
 
+func TestValidatorWithDefaultRegisteredClaims(t *testing.T) {
+	_, priv, _ := ed25519.GenerateKey(rand.Reader)
+	domain := "test.com"
+	subject := "user123"
+	purpose := jwt.PurposeLogin
+	expiration := time.Hour
+
+	mockConfig := adapter.NewMockConfigProvider(t)
+	mockConfig.On("GetPrivateKey").Return(priv).Maybe()
+	mockConfig.On("GetDomain").Return(domain).Maybe()
+	mockConfig.On("GetAuthCookieName").Return("auth").Maybe()
+	mockConfig.On("GetAuthTokenName").Return("auth").Maybe()
+
+	t.Run("valid token with only standard claims", func(t *testing.T) {
+		validator := NewValidator(mockConfig) // No WithClaims option
+
+		token, err := jwt.CreateToken(
+			priv,
+			domain,
+			subject,
+			purpose,
+			expiration,
+		)
+		require.NoError(t, err)
+
+		// Should work with nil claimsType
+		baseClaims, customClaims, err := validator.ValidateWithClaims(token, purpose, nil)
+		require.NoError(t, err)
+		assert.Equal(t, subject, baseClaims.Subject)
+		assert.Equal(t, domain, baseClaims.Issuer)
+		assert.NotNil(t, customClaims) // Should return parsed claims
+	})
+
+	t.Run("valid token with standard claims when explicitly passing RegisteredClaims", func(t *testing.T) {
+		validator := NewValidator(mockConfig) // No WithClaims option
+
+		token, err := jwt.CreateToken(
+			priv,
+			domain,
+			subject,
+			purpose,
+			expiration,
+		)
+		require.NoError(t, err)
+
+		// Explicitly pass RegisteredClaims type
+		baseClaims, customClaims, err := validator.ValidateWithClaims(token, purpose, &gjwt.RegisteredClaims{})
+		require.NoError(t, err)
+		assert.Equal(t, subject, baseClaims.Subject)
+		assert.Equal(t, domain, baseClaims.Issuer)
+		assert.NotNil(t, customClaims) // Should return the parsed claims
+		assert.Equal(t, subject, customClaims.(*gjwt.RegisteredClaims).Subject)
+	})
+
+	t.Run("token with custom claims when only standard claims expected", func(t *testing.T) {
+		validator := NewValidator(mockConfig) // No WithClaims option
+
+		// Create token with custom claims
+		token, err := jwt.CreateToken(
+			priv,
+			domain,
+			subject,
+			purpose,
+			expiration,
+			jwt.WithClaims(&CustomClaims{}),
+			jwt.WithModifiers(func(claims gjwt.Claims) {
+				if cc, ok := claims.(*CustomClaims); ok {
+					cc.Role = "admin"
+				}
+			}),
+		)
+		require.NoError(t, err)
+
+		// Should still work but return the parsed claims
+		baseClaims, customClaims, err := validator.ValidateWithClaims(token, purpose, nil)
+		require.NoError(t, err)
+		assert.Equal(t, subject, baseClaims.Subject)
+		assert.Equal(t, domain, baseClaims.Issuer)
+		assert.NotNil(t, customClaims) // Should return parsed claims
+	})
+}
+
 func TestValidatorWithCustomClaims(t *testing.T) {
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	domain := "test.com"
@@ -81,7 +163,7 @@ func TestValidatorWithCustomClaims(t *testing.T) {
 	mockConfig.On("GetAuthTokenName").Return("auth").Maybe()
 
 	t.Run("valid custom claims with ClaimSetter", func(t *testing.T) {
-		validator := NewValidator(mockConfig, jwt.WithClaims(&CustomClaims{}))
+		validator := NewValidator(mockConfig)
 
 		// Create token with custom claims using ClaimSetter
 		token, err := jwt.CreateToken(
@@ -100,7 +182,7 @@ func TestValidatorWithCustomClaims(t *testing.T) {
 		require.NoError(t, err)
 
 		// Validate with claims
-		baseClaims, customClaims, err := validator.ValidateWithClaims(token, purpose)
+		baseClaims, customClaims, err := validator.ValidateWithClaims(token, purpose, &CustomClaims{})
 		require.NoError(t, err)
 		assert.Equal(t, subject, baseClaims.Subject)
 		assert.Equal(t, domain, baseClaims.Issuer)
@@ -135,7 +217,7 @@ func TestValidatorWithCustomClaims(t *testing.T) {
 		require.NoError(t, err)
 
 		// Validate with claims
-		baseClaims, customClaims, err := validator.ValidateWithClaims(token, purpose)
+		baseClaims, customClaims, err := validator.ValidateWithClaims(token, purpose, &CustomClaims{})
 		require.NoError(t, err)
 		assert.Equal(t, subject, baseClaims.Subject)
 		assert.Equal(t, domain, baseClaims.Issuer)
@@ -175,7 +257,7 @@ func TestValidatorWithCustomClaims(t *testing.T) {
 		require.NoError(t, err)
 
 		// Should fail validation due to claims type mismatch
-		_, _, err = validator.ValidateWithClaims(token, purpose)
+		_, _, err = validator.ValidateWithClaims(token, purpose, &CustomClaims{})
 		assert.ErrorIs(t, err, jwt.ErrJWTUnexpectedClaimsType)
 	})
 
@@ -199,7 +281,7 @@ func TestValidatorWithCustomClaims(t *testing.T) {
 		require.NoError(t, err)
 
 		// Validate with claims
-		baseClaims, customClaims, err := validator.ValidateWithClaims(token, purpose)
+		baseClaims, customClaims, err := validator.ValidateWithClaims(token, purpose, &CustomClaims{})
 		require.NoError(t, err)
 		assert.Equal(t, subject, baseClaims.Subject)
 
@@ -222,9 +304,10 @@ func TestValidatorWithCustomClaims(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Should fail validation since we expected custom claims
-		_, _, err = validator.ValidateWithClaims(token, purpose)
-		assert.ErrorIs(t, err, jwt.ErrJWTUnexpectedClaimsType)
+		// Should fail validation since token doesn't have expected custom claims
+		_, _, err = validator.ValidateWithClaims(token, purpose, &CustomClaims{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "unexpected claims type")
 	})
 
 	t.Run("custom claims without registered claims", func(t *testing.T) {
@@ -251,8 +334,9 @@ func TestValidatorWithCustomClaims(t *testing.T) {
 		)
 		require.NoError(t, err)
 
-		// Should pass validation since we now properly embed RegisteredClaims
-		_, _, err = validator.ValidateWithClaims(token, purpose)
-		assert.NoError(t, err)
+		// Should pass validation by mapping to the claims type
+		_, customClaims, err := validator.ValidateWithClaims(token, purpose, &ClaimsWithoutRegistered{})
+		require.NoError(t, err)
+		assert.Equal(t, "test", customClaims.(*ClaimsWithoutRegistered).Role)
 	})
 }

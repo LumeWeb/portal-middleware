@@ -27,7 +27,8 @@ type AuthMiddlewareOptions struct {
 	Purpose        jwt.Purpose
 	EmptyAllowed   bool
 	ExpiredAllowed bool
-	Options        []jwt.Option // Use JWT options from subpackage
+	Options        []jwt.Option
+	ExpectedClaims gjwt.Claims
 }
 
 // AuthMiddleware creates HTTP middleware for JWT authentication
@@ -55,11 +56,16 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 
 			validator := options.Validator
 			if validator == nil {
-				validator = validation.NewValidator(options.Config, options.Options...)
+				validator = validation.NewValidator(options.Config)
 			}
 
-			// Get both base and custom claims
-			baseClaims, customClaims, err := validator.ValidateWithClaims(authToken, options.Purpose)
+			// Determine claims type to validate against
+			claimsType := options.ExpectedClaims
+			if claimsType == nil {
+				claimsType = &gjwt.RegisteredClaims{}
+			}
+
+			baseClaims, customClaims, err := validator.ValidateWithClaims(authToken, options.Purpose, claimsType)
 			if err != nil {
 				// Handle expired tokens when allowed
 				if options.ExpiredAllowed && errors.Is(err, gjwt.ErrTokenExpired) {
@@ -167,5 +173,12 @@ func WithExpiredAllowed(allow bool) AuthMiddlewareOption {
 func WithJWTOptions(jwtOpts ...jwt.Option) AuthMiddlewareOption {
 	return func(opts *AuthMiddlewareOptions) {
 		opts.Options = append(opts.Options, jwtOpts...)
+		// Find and store the claims type if present
+		for _, opt := range jwtOpts {
+			if claimOpt, ok := opt.(jwt.WithClaimsOpt); ok {
+				opts.ExpectedClaims = claimOpt.Claims()
+				break
+			}
+		}
 	}
 }

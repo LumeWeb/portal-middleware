@@ -81,9 +81,9 @@ func (_c *MockTokenValidator_Validate_Call) RunAndReturn(run func(string, jwt.Pu
 	return _c
 }
 
-// ValidateWithClaims provides a mock function with given fields: token, purpose
-func (_m *MockTokenValidator) ValidateWithClaims(token string, purpose jwt.Purpose) (*v5.RegisteredClaims, v5.Claims, error) {
-	ret := _m.Called(token, purpose)
+// ValidateWithClaims provides a mock function with given fields: token, purpose, claimsType
+func (_m *MockTokenValidator) ValidateWithClaims(token string, purpose jwt.Purpose, claimsType v5.Claims) (*v5.RegisteredClaims, v5.Claims, error) {
+	ret := _m.Called(token, purpose, claimsType)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ValidateWithClaims")
@@ -92,27 +92,27 @@ func (_m *MockTokenValidator) ValidateWithClaims(token string, purpose jwt.Purpo
 	var r0 *v5.RegisteredClaims
 	var r1 v5.Claims
 	var r2 error
-	if rf, ok := ret.Get(0).(func(string, jwt.Purpose) (*v5.RegisteredClaims, v5.Claims, error)); ok {
-		return rf(token, purpose)
+	if rf, ok := ret.Get(0).(func(string, jwt.Purpose, v5.Claims) (*v5.RegisteredClaims, v5.Claims, error)); ok {
+		return rf(token, purpose, claimsType)
 	}
-	if rf, ok := ret.Get(0).(func(string, jwt.Purpose) *v5.RegisteredClaims); ok {
-		r0 = rf(token, purpose)
+	if rf, ok := ret.Get(0).(func(string, jwt.Purpose, v5.Claims) *v5.RegisteredClaims); ok {
+		r0 = rf(token, purpose, claimsType)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*v5.RegisteredClaims)
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(string, jwt.Purpose) v5.Claims); ok {
-		r1 = rf(token, purpose)
+	if rf, ok := ret.Get(1).(func(string, jwt.Purpose, v5.Claims) v5.Claims); ok {
+		r1 = rf(token, purpose, claimsType)
 	} else {
 		if ret.Get(1) != nil {
 			r1 = ret.Get(1).(v5.Claims)
 		}
 	}
 
-	if rf, ok := ret.Get(2).(func(string, jwt.Purpose) error); ok {
-		r2 = rf(token, purpose)
+	if rf, ok := ret.Get(2).(func(string, jwt.Purpose, v5.Claims) error); ok {
+		r2 = rf(token, purpose, claimsType)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -128,13 +128,14 @@ type MockTokenValidator_ValidateWithClaims_Call struct {
 // ValidateWithClaims is a helper method to define mock.On call
 //   - token string
 //   - purpose jwt.Purpose
-func (_e *MockTokenValidator_Expecter) ValidateWithClaims(token interface{}, purpose interface{}) *MockTokenValidator_ValidateWithClaims_Call {
-	return &MockTokenValidator_ValidateWithClaims_Call{Call: _e.mock.On("ValidateWithClaims", token, purpose)}
+//   - claimsType v5.Claims
+func (_e *MockTokenValidator_Expecter) ValidateWithClaims(token interface{}, purpose interface{}, claimsType interface{}) *MockTokenValidator_ValidateWithClaims_Call {
+	return &MockTokenValidator_ValidateWithClaims_Call{Call: _e.mock.On("ValidateWithClaims", token, purpose, claimsType)}
 }
 
-func (_c *MockTokenValidator_ValidateWithClaims_Call) Run(run func(token string, purpose jwt.Purpose)) *MockTokenValidator_ValidateWithClaims_Call {
+func (_c *MockTokenValidator_ValidateWithClaims_Call) Run(run func(token string, purpose jwt.Purpose, claimsType v5.Claims)) *MockTokenValidator_ValidateWithClaims_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(string), args[1].(jwt.Purpose))
+		run(args[0].(string), args[1].(jwt.Purpose), args[2].(v5.Claims))
 	})
 	return _c
 }
@@ -144,7 +145,7 @@ func (_c *MockTokenValidator_ValidateWithClaims_Call) Return(_a0 *v5.RegisteredC
 	return _c
 }
 
-func (_c *MockTokenValidator_ValidateWithClaims_Call) RunAndReturn(run func(string, jwt.Purpose) (*v5.RegisteredClaims, v5.Claims, error)) *MockTokenValidator_ValidateWithClaims_Call {
+func (_c *MockTokenValidator_ValidateWithClaims_Call) RunAndReturn(run func(string, jwt.Purpose, v5.Claims) (*v5.RegisteredClaims, v5.Claims, error)) *MockTokenValidator_ValidateWithClaims_Call {
 	_c.Call.Return(run)
 	return _c
 }
