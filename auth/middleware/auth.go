@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	gjwt "github.com/golang-jwt/jwt/v5"
+	"github.com/labstack/echo/v4"
 	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal-middleware/auth/adapter"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"go.lumeweb.com/portal-middleware/auth/validation"
 	mcontext "go.lumeweb.com/portal-middleware/context"
-	"net/http"
 	"reflect"
 	"strconv"
 )
@@ -31,10 +31,9 @@ type AuthMiddlewareOptions struct {
 	ExpectedClaims gjwt.Claims
 }
 
-// AuthMiddleware creates HTTP middleware for JWT authentication
+// AuthMiddleware creates Echo middleware for JWT authentication
 // Validates tokens and injects user context if valid
-// Returns a handler that can be chained with other middleware
-func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handler {
+func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 	if options.Config == nil {
 		panic("AuthMiddleware requires a ConfigProvider")
 	}
@@ -42,16 +41,15 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 		panic("AuthMiddleware requires a Purpose")
 	}
 
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			r := c.Request()
 			authToken := auth.FindAuthToken(r, options.Config.GetPrivateKey(), options.Config.GetAuthCookieName(), options.Config.GetAuthTokenName())
 			if authToken == "" {
 				if !options.EmptyAllowed {
-					http.Error(w, "Missing token", http.StatusUnauthorized)
-					return
+					return echo.ErrUnauthorized
 				}
-				next.ServeHTTP(w, r)
-				return
+				return next(c)
 			}
 
 			validator := options.Validator
@@ -71,21 +69,31 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 				if options.ExpiredAllowed && errors.Is(err, gjwt.ErrTokenExpired) {
 					// We still need baseClaims to proceed
 					if baseClaims == nil {
-						http.Error(w, "Invalid token", http.StatusUnauthorized)
-						return
+						return echo.ErrUnauthorized
 					}
 				} else {
-					http.Error(w, "Invalid token", http.StatusUnauthorized)
-					return
+					return echo.ErrUnauthorized
 				}
 			}
 
+			// If validation passed but we got nil claims, reject
+			if baseClaims == nil {
+				return echo.ErrUnauthorized
+			}
+
+			// If we got claims but they don't match expected type, reject
+			if customClaims != nil && !reflect.TypeOf(customClaims).AssignableTo(reflect.TypeOf(claimsType)) {
+				return echo.ErrUnauthorized
+			}
+
 			// Build context with all claims
-			ctx := r.Context()
 			if baseClaims != nil {
-				userID, _ := strconv.ParseUint(baseClaims.Subject, 10, 64)
-				ctx = context.WithValue(ctx, mcontext.UserIDKey, uint(userID))
-				ctx = context.WithValue(ctx, mcontext.AuthTokenKey, authToken)
+				userID, err := strconv.ParseUint(baseClaims.Subject, 10, 64)
+				if err != nil {
+					return echo.ErrUnauthorized
+				}
+				c.Set(string(mcontext.UserIDKey), uint(userID))
+				c.Set(string(mcontext.AuthTokenKey), authToken)
 
 				// Only store custom claims if they match the expected type
 				if customClaims != nil {
@@ -99,23 +107,31 @@ func AuthMiddleware(options AuthMiddlewareOptions) func(http.Handler) http.Handl
 						// Check if types match directly or via pointer
 						if !actualType.AssignableTo(expectedClaimsType) &&
 							!actualType.AssignableTo(expectedPtrType) {
-							http.Error(w, "Invalid token claims", http.StatusUnauthorized)
-							return
+							return echo.ErrUnauthorized
 						}
 					}
 					// Store claims in context
 					wrapper := auth.NewClaimsWrapper(baseClaims, customClaims)
-					ctx = context.WithValue(ctx, auth.ClaimsContextKey{}, wrapper)
+					c.Set(string(mcontext.ClaimsContextKey), wrapper)
+
+					// Also set in request context for compatibility
+					req := c.Request()
+					ctx := context.WithValue(req.Context(), mcontext.ClaimsContextKey, wrapper)
+					c.SetRequest(req.WithContext(ctx))
 				} else {
 					// Store just base claims if no custom claims
 					wrapper := auth.NewClaimsWrapper(baseClaims, nil)
-					ctx = context.WithValue(ctx, auth.ClaimsContextKey{}, wrapper)
+					c.Set(string(mcontext.ClaimsContextKey), wrapper)
+
+					// Also set in request context for compatibility
+					req := c.Request()
+					ctx := context.WithValue(req.Context(), mcontext.ClaimsContextKey, wrapper)
+					c.SetRequest(req.WithContext(ctx))
 				}
 			}
 
-			r = r.WithContext(ctx)
-			next.ServeHTTP(w, r)
-		})
+			return next(c)
+		}
 	}
 }
 

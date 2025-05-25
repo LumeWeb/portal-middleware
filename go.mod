@@ -8,12 +8,15 @@ require (
 	github.com/getkin/kin-openapi v0.132.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/gorilla/mux v1.8.2-0.20240619235004-db9d1d0073d2
+	github.com/labstack/echo/v4 v4.13.4
 	github.com/rs/cors v1.11.1
 	github.com/stretchr/testify v1.10.0
-	go.lumeweb.com/gswagger v0.11.0
+	go.lumeweb.com/gswagger v0.15.0
 	go.lumeweb.com/httputil v0.4.1
 	go.lumeweb.com/portal v0.4.2-0.20250504192002-4547d95e5a02
+	go.lumeweb.com/portal-router v0.1.8
 	go.sia.tech/coreutils v0.12.1
+	gorm.io/gorm v1.25.12
 )
 
 require (
@@ -65,7 +68,10 @@ require (
 	github.com/klauspost/reedsolomon v1.12.4 // indirect
 	github.com/knadh/koanf v1.5.0 // indirect
 	github.com/knadh/koanf/v2 v2.1.2 // indirect
+	github.com/labstack/gommon v0.4.2 // indirect
 	github.com/mailru/easyjson v0.9.0 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/minio/sha256-simd v1.0.1 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
@@ -85,6 +91,8 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/urfave/cli/v3 v3.0.0-beta1 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.19 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.19 // indirect
@@ -95,11 +103,11 @@ require (
 	go.sia.tech/renterd v1.1.1 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
-	golang.org/x/net v0.37.0 // indirect
-	golang.org/x/sys v0.31.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/net v0.40.0 // indirect
+	golang.org/x/sys v0.33.0 // indirect
+	golang.org/x/text v0.25.0 // indirect
 	golang.org/x/tools v0.31.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20250313205543-e70fdf4c4cb4 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250313205543-e70fdf4c4cb4 // indirect
@@ -109,7 +117,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/datatypes v1.2.5 // indirect
 	gorm.io/driver/mysql v1.5.7 // indirect
-	gorm.io/gorm v1.25.12 // indirect
 	lukechampine.com/blake3 v1.4.0 // indirect
 	lukechampine.com/frand v1.5.1 // indirect
 )

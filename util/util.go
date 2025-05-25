@@ -10,6 +10,7 @@ import (
 	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"go.lumeweb.com/portal-middleware/auth/middleware"
 	"go.lumeweb.com/portal-middleware/cors"
+	"go.lumeweb.com/portal-middleware/util/convert"
 	"go.lumeweb.com/portal/core"
 	"net/http"
 )
@@ -39,11 +40,11 @@ func (m *Middleware) Then() http.Handler {
 // WithAuth adds authentication middleware to the chain.
 // Configures JWT validation with the specified purpose and configuration.
 func (m *Middleware) WithAuth(config adapter.ConfigProvider, purpose jwt.Purpose) *Middleware {
-	return m.Chain(middleware.AuthMiddleware(middleware.AuthMiddlewareOptions{
+	return m.Chain(convert.Unwrap(middleware.AuthMiddleware(middleware.AuthMiddlewareOptions{
 		Config:         config,
 		Purpose:        purpose,
 		ExpiredAllowed: false,
-	}))
+	})))
 }
 
 // WithAuthFromCore adds authentication middleware using core.Context

@@ -1,16 +1,16 @@
 package middleware
 
 import (
+	"github.com/labstack/echo/v4"
 	"go.lumeweb.com/portal-middleware/auth/adapter"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"go.lumeweb.com/portal-middleware/auth/middleware"
 	"go.lumeweb.com/portal-middleware/auth/validation"
 	"go.lumeweb.com/portal/core"
-	"net/http"
 )
 
 // AuthMiddleware creates authentication middleware using core configuration
-func AuthMiddleware(ctx core.Context, purpose jwt.Purpose, options ...AuthOption) func(http.Handler) http.Handler {
+func AuthMiddleware(ctx core.Context, purpose jwt.Purpose, options ...AuthOption) echo.MiddlewareFunc {
 	config := adapter.NewFromCore(ctx)
 
 	opts := middleware.NewAuthOptions(
