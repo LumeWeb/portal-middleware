@@ -2,14 +2,14 @@ package middleware
 
 import (
 	"context"
-	"errors"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	mo "go.lumeweb.com/portal-middleware/context"
 	"go.lumeweb.com/portal/core"
 	coreTesting "go.lumeweb.com/portal/core/testing"
 	coreMocks "go.lumeweb.com/portal/core/testing/mocks"
+	"go.lumeweb.com/portal/db/models"
+	"gorm.io/gorm"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,7 +32,7 @@ func TestNewAccessMiddlewareFromCore(t *testing.T) {
 		{
 			name: "user exists and access granted",
 			setupMocks: func(mockUserSvc *coreMocks.MockUserService, mockAccessSvc *coreMocks.MockAccessService) {
-				mockUserSvc.On("Exists", mock.Anything, map[string]any{"id": uint(1)}).Return(true, struct{ ID uint }{ID: 1}, nil)
+				mockUserSvc.On("AccountExists", uint(1)).Return(true, &models.User{Model: gorm.Model{ID: 1}}, nil)
 				mockAccessSvc.On("CheckAccess", uint(1), "example.com", "/api", "GET").Return(true, nil)
 			},
 			userID:         1,
@@ -41,7 +41,7 @@ func TestNewAccessMiddlewareFromCore(t *testing.T) {
 		{
 			name: "user exists but access denied",
 			setupMocks: func(mockUserSvc *coreMocks.MockUserService, mockAccessSvc *coreMocks.MockAccessService) {
-				mockUserSvc.On("Exists", mock.Anything, map[string]any{"id": uint(2)}).Return(true, struct{ ID uint }{ID: 2}, nil)
+				mockUserSvc.On("AccountExists", uint(2)).Return(true, &models.User{Model: gorm.Model{ID: 2}}, nil)
 				mockAccessSvc.On("CheckAccess", uint(2), "example.com", "/api", "GET").Return(false, nil)
 			},
 			userID:         2,
@@ -50,8 +50,8 @@ func TestNewAccessMiddlewareFromCore(t *testing.T) {
 		{
 			name: "access check error",
 			setupMocks: func(mockUserSvc *coreMocks.MockUserService, mockAccessSvc *coreMocks.MockAccessService) {
-				mockUserSvc.On("Exists", mock.Anything, map[string]any{"id": uint(3)}).Return(true, struct{ ID uint }{ID: 3}, nil)
-				mockAccessSvc.On("CheckAccess", uint(3), "example.com", "/api", "GET").Return(false, errors.New("db error"))
+				mockUserSvc.On("AccountExists", uint(3)).Return(true, &models.User{Model: gorm.Model{ID: 3}}, nil)
+				mockAccessSvc.On("CheckAccess", uint(3), "example.com", "/api", "GET").Return(false, gorm.ErrRecordNotFound)
 			},
 			userID:         3,
 			expectedStatus: http.StatusInternalServerError,
@@ -59,7 +59,7 @@ func TestNewAccessMiddlewareFromCore(t *testing.T) {
 		{
 			name: "user does not exist",
 			setupMocks: func(mockUserSvc *coreMocks.MockUserService, mockAccessSvc *coreMocks.MockAccessService) {
-				mockUserSvc.On("Exists", mock.Anything, map[string]any{"id": uint(4)}).Return(false, nil, nil)
+				mockUserSvc.On("AccountExists", uint(4)).Return(false, nil, gorm.ErrRecordNotFound)
 			},
 			userID:         4,
 			expectedStatus: http.StatusUnauthorized,

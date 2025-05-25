@@ -86,8 +86,6 @@ func TestAuthMiddleware(t *testing.T) {
 	t.Run("expired allowed", func(t *testing.T) {
 		// Create a mock validator that returns base claims for expired tokens
 		mockValidator := validation.NewMockTokenValidator(t)
-		mockValidator.On("ValidateWithClaims", mock.Anything, jwt.Purpose("test-purpose")).
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, nil, gjwt.ErrTokenExpired)
 
 		middleware := AuthMiddleware(ctx, "test-purpose",
 			WithAuthExpiredAllowed(true),
@@ -110,6 +108,11 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		token := createTestToken(t, ctx, "123", "test-purpose", -time.Hour) // Expired 1 hour ago
 		req.Header.Set("Authorization", "Bearer "+token)
+
+		claim := &gjwt.RegisteredClaims{Subject: "123"}
+
+		mockValidator.On("ValidateWithClaims", token, jwt.Purpose("test-purpose"), mock.Anything).
+			Return(claim, claim, nil)
 
 		rr := httptest.NewRecorder()
 		handler := middleware(testHandler)

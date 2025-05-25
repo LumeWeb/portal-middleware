@@ -12,12 +12,18 @@ import (
 	coreMocks "go.lumeweb.com/portal/core/testing/mocks"
 )
 
-func TestAccessMiddleware(t *testing.T) {
+func setupAccessTest(t *testing.T) (*auth.MockUserChecker, *coreMocks.MockAccessService, func(http.Handler) http.Handler) {
 	mockUserChecker := auth.NewMockUserChecker(t)
 	mockAccessChecker := coreMocks.NewMockAccessService(t)
 	middleware := AccessMiddleware(mockUserChecker, mockAccessChecker)
+	return mockUserChecker, mockAccessChecker, middleware
+}
+
+func TestAccessMiddleware(t *testing.T) {
 
 	t.Run("access granted", func(t *testing.T) {
+		mockUserChecker, mockAccessChecker, middleware := setupAccessTest(t)
+
 		mockUserChecker.On("AccountExists", uint(1)).Return(true, nil)
 		mockAccessChecker.On("CheckAccess", uint(1), "example.com", "/", "GET").Return(true, nil)
 
@@ -30,6 +36,8 @@ func TestAccessMiddleware(t *testing.T) {
 	})
 
 	t.Run("access denied", func(t *testing.T) {
+		mockUserChecker, mockAccessChecker, middleware := setupAccessTest(t)
+
 		mockUserChecker.On("AccountExists", uint(2)).Return(true, nil)
 		mockAccessChecker.On("CheckAccess", uint(2), "example.com", "/admin", "GET").Return(false, nil)
 
@@ -42,6 +50,8 @@ func TestAccessMiddleware(t *testing.T) {
 	})
 
 	t.Run("user not found", func(t *testing.T) {
+		mockUserChecker, _, middleware := setupAccessTest(t)
+
 		mockUserChecker.On("AccountExists", uint(3)).Return(false, nil)
 
 		req := httptest.NewRequest("GET", "/", nil)
@@ -53,6 +63,8 @@ func TestAccessMiddleware(t *testing.T) {
 	})
 
 	t.Run("access check error", func(t *testing.T) {
+		mockUserChecker, mockAccessChecker, middleware := setupAccessTest(t)
+
 		mockUserChecker.On("AccountExists", uint(4)).Return(true, nil)
 		mockAccessChecker.On("CheckAccess", uint(4), "example.com", "/api", "GET").Return(false, assert.AnError)
 

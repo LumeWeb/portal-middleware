@@ -25,20 +25,24 @@ type CustomClaims struct {
 	Role string `json:"role"`
 }
 
-func TestAuthMiddleware(t *testing.T) {
+func setupAuthTest(t *testing.T) (*adapter.MockConfigProvider, *validation.MockTokenValidator) {
 	mockConfig := adapter.NewMockConfigProvider(t)
 	mockValidator := validation.NewMockTokenValidator(t)
-	mockConfig.On("GetPrivateKey").Return(ed25519.PrivateKey{}).Maybe()
-	mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
 
-	// Setup mock config to return a valid private key
 	_, privKey, _ := ed25519.GenerateKey(nil)
 	mockConfig.On("GetPrivateKey").Return(privKey).Maybe()
 	mockConfig.On("GetDomain").Return("example.com").Maybe()
 	mockConfig.On("GetAuthCookieName").Return("auth_cookie").Maybe()
 	mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
 
+	return mockConfig, mockValidator
+}
+
+func TestAuthMiddleware(t *testing.T) {
+
 	t.Run("valid token", func(t *testing.T) {
+		mockConfig, mockValidator := setupAuthTest(t)
+
 		// Setup validator mock first
 		mockValidator.On("ValidateWithClaims", mock.Anything, jwt.PurposeLogin, &gjwt.RegisteredClaims{}).
 			Return(&gjwt.RegisteredClaims{Subject: "123"}, (*gjwt.RegisteredClaims)(nil), nil).Once()
@@ -82,6 +86,7 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("invalid token", func(t *testing.T) {
+		mockConfig, mockValidator := setupAuthTest(t)
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer invalid.token")
 
@@ -102,11 +107,12 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("expired but allowed", func(t *testing.T) {
+		mockConfig, mockValidator := setupAuthTest(t)
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer expired.token")
 
 		mockValidator.On("ValidateWithClaims", "expired.token", jwt.PurposeLogin, &gjwt.RegisteredClaims{}).
-			Return(&gjwt.RegisteredClaims{Subject: "123"}, (*gjwt.RegisteredClaims)(nil), gjwt.ErrTokenExpired)
+			Return(&gjwt.RegisteredClaims{Subject: "123"}, &gjwt.RegisteredClaims{}, gjwt.ErrTokenExpired)
 
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
@@ -124,6 +130,7 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("invalid purpose", func(t *testing.T) {
+		mockConfig, mockValidator := setupAuthTest(t)
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer wrong.purpose.token")
 
@@ -144,12 +151,14 @@ func TestAuthMiddleware(t *testing.T) {
 	})
 
 	t.Run("custom claims registration", func(t *testing.T) {
+		mockConfig, mockValidator := setupAuthTest(t)
 		type CustomClaims struct {
 			*gjwt.RegisteredClaims
 			CustomField string `json:"custom_field"`
 		}
 
 		// Setup mock config expectations
+		_, privKey, _ := ed25519.GenerateKey(nil)
 		mockConfig.On("GetPrivateKey").Return(privKey).Maybe()
 		mockConfig.On("GetAuthCookieName").Return("auth_cookie").Maybe()
 		mockConfig.On("GetAuthTokenName").Return("auth_token").Maybe()
@@ -210,6 +219,10 @@ func TestAuthMiddleware(t *testing.T) {
 				assert.Contains(t, r.(string), "Purpose", "panic message should mention Purpose")
 			}
 		}()
+
+		mockConfig := adapter.NewMockConfigProvider(t)
+		_, privKey, _ := ed25519.GenerateKey(nil)
+		mockConfig.On("GetPrivateKey").Return(privKey).Maybe()
 
 		AuthMiddleware(AuthMiddlewareOptions{
 			Config: mockConfig,

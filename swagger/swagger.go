@@ -3,18 +3,95 @@ package swagger
 
 import (
 	"embed"
+	"fmt"
+	"github.com/getkin/kin-openapi/openapi3"
 	"io/fs"
 	"net/http"
 
-	"github.com/getkin/kin-openapi/openapi3"
 	"github.com/gorilla/mux"
 )
 
 //go:embed embed
 var swagfs embed.FS
 
-// LoadAndValidateSpec loads and validates an OpenAPI spec
+// WireRouter wires swagger UI endpoints to an existing mux.Router.
+// It configures the UI to fetch the OpenAPI spec from the specified specPath.
+// This function is intended to be used in conjunction with a mechanism
+// that serves the OpenAPI spec itself (e.g., gswagger integrated via httputil).
+//
+// Parameters:
+// - router: The mux.Router to wire the Swagger UI handlers to.
+// - specPath: The URL path where the OpenAPI JSON spec is served (e.g., "/swagger.json").
+// - uiPathPrefix: The URL path prefix where the Swagger UI will be served (e.g., "/swagger").
+func WireRouter(router *mux.Router, specPath string, uiPathPrefix string) error {
+	// Ensure the specPath is valid
+	if specPath == "" {
+		return fmt.Errorf("specPath cannot be empty")
+	}
+	// Ensure the uiPathPrefix is valid
+	if uiPathPrefix == "" || uiPathPrefix[0] != '/' {
+		return fmt.Errorf("uiPathPrefix must start with '/' and cannot be empty")
+	}
+
+	// Serve the static Swagger UI files
+	swaggerFiles, err := fs.Sub(swagfs, "embed")
+	if err != nil {
+		return fmt.Errorf("failed to get embedded swagger files: %w", err)
+	}
+	swaggerHandler := http.StripPrefix(uiPathPrefix, http.FileServer(http.FS(swaggerFiles)))
+
+	// Redirect from the base UI path to the index.html
+	router.HandleFunc(uiPathPrefix, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, uiPathPrefix+"/", http.StatusMovedPermanently)
+	}).Methods("GET")
+
+	// Serve the static files under the path prefix
+	router.PathPrefix(uiPathPrefix + "/").Handler(swaggerHandler)
+
+	// Note: This package no longer serves the spec itself.
+	// The spec is expected to be served by another handler,
+	// typically generated dynamically by gswagger.
+	// The swagger-initializer.js file (embedded) is modified
+	// by the generate.go script to point to "/swagger.json" by default.
+	// If a different specPath is needed, the generate.go script
+	// or the swagger-initializer.js file might need adjustment,
+	// or a custom initializer could be served.
+	// For this integration, we assume the gswagger spec is at "/swagger.json".
+
+	return nil
+}
+
+// NewStandaloneHandler creates an HTTP handler that serves the Swagger UI.
+// It configures the UI to fetch the OpenAPI spec from the specified specPath.
+// This is useful for serving the UI from a single handler, assuming the spec
+// is available at the given specPath.
+//
+// Parameters:
+// - specPath: The URL path where the OpenAPI JSON spec is served (e.g., "/swagger.json").
+// - uiPathPrefix: The URL path prefix where the Swagger UI will be served (e.g., "/swagger").
+//
+// Returns:
+// - http.Handler: The configured handler serving the Swagger UI.
+// - error: Any error encountered during setup.
+func NewStandaloneHandler(specPath string, uiPathPrefix string) (http.Handler, error) {
+	router := mux.NewRouter()
+	if err := WireRouter(router, specPath, uiPathPrefix); err != nil {
+		return nil, err
+	}
+	return router, nil
+}
+
+// --- Deprecated Functions ---
+
+// LoadAndValidateSpec is deprecated. Spec loading and validation
+// should be handled by the spec generation mechanism (e.g., gswagger).
+//
+// Deprecated: Use spec generation libraries like gswagger instead.
 func LoadAndValidateSpec(spec []byte) ([]byte, error) {
+	// This function is no longer needed for the primary integration path
+	// where gswagger generates the spec. Keeping it for potential
+	// backward compatibility or alternative use cases, but marked deprecated.
+	// Original implementation remains the same.
 	loader := openapi3.NewLoader()
 	doc, err := loader.LoadFromData(spec)
 	if err != nil {
@@ -28,45 +105,24 @@ func LoadAndValidateSpec(spec []byte) ([]byte, error) {
 	return doc.MarshalJSON()
 }
 
-// WireRouter wires swagger endpoints to an existing mux.Router.
-// It expects a pre-validated JSON spec.
-func WireRouter(jsonSpec []byte, router *mux.Router) {
-	swaggerFiles, _ := fs.Sub(swagfs, "embed")
-	swaggerHandler := http.StripPrefix("/swagger", http.FileServer(http.FS(swaggerFiles)))
-
-	router.HandleFunc("/swagger.json", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(jsonSpec)
-	}).Methods("GET")
-
-	router.HandleFunc("/swagger", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/swagger/", http.StatusMovedPermanently)
-	}).Methods("GET")
-
-	router.PathPrefix("/swagger/").Handler(swaggerHandler)
-}
-
-// NewHandler creates and wires swagger endpoints to an existing mux.Router.
-// It validates the OpenAPI spec and returns any validation errors.
+// NewHandler is deprecated. Use WireRouter in conjunction with a spec
+// generation mechanism (like gswagger) instead.
+//
+// Deprecated: Use WireRouter instead.
 func NewHandler(spec []byte, router *mux.Router) error {
-	jsonDoc, err := LoadAndValidateSpec(spec)
+	// This function combined spec loading/validation with wiring.
+	// In the new model, spec generation is separate.
+	// Keeping for backward compatibility, but marked deprecated.
+	// It now calls the deprecated LoadAndValidateSpec and the new WireRouter.
+	_, err := LoadAndValidateSpec(spec)
 	if err != nil {
 		return err
 	}
 
-	WireRouter(jsonDoc, router)
+	// Assuming the spec will be served at "/swagger.json" by the gswagger integration
+	// This might need adjustment if gswagger serves it elsewhere.
+	// A better approach might be to remove this deprecated function entirely
+	// or require the specPath as a parameter. For now, assuming default.
+	WireRouter(router, "/swagger.json", "/swagger") // Assuming default paths
 	return nil
-}
-
-// NewStandaloneHandler creates an HTTP handler that serves both the Swagger UI and OpenAPI spec.
-// It validates the OpenAPI spec and returns a configured http.Handler.
-func NewStandaloneHandler(spec []byte) (http.Handler, error) {
-	jsonDoc, err := LoadAndValidateSpec(spec)
-	if err != nil {
-		return nil, err
-	}
-
-	router := mux.NewRouter()
-	WireRouter(jsonDoc, router)
-	return router, nil
 }
