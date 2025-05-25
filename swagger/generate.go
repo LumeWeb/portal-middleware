@@ -87,7 +87,7 @@ func main() {
 		}
 	}
 	initFile, _ := os.ReadFile(filepath.Join("embed", "swagger-initializer.js"))
-	newInit := regexp.MustCompile(`url:\s+"[^"]*"`).ReplaceAllLiteral(initFile, []byte(`url: "/swagger.json"`))
+	newInit := regexp.MustCompile(`url:\s+"[^"]*"`).ReplaceAllLiteral(initFile, []byte(`url: window.location.pathname.replace(/\/?$/, "/api/spec.json")`))
 	newInit = regexp.MustCompile(`,?\s+SwaggerUIStandalonePreset.*\n`).ReplaceAllLiteral(newInit, []byte("\n"))
 	newInit = regexp.MustCompile(`(?s),\s+plugins: \[.*],\n`).ReplaceAllLiteral(newInit, []byte("\n"))
 	newInit = regexp.MustCompile(`\n\s*layout:.*\n`).ReplaceAllLiteral(newInit, []byte("\n"))

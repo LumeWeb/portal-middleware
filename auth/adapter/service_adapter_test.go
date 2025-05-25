@@ -2,13 +2,14 @@ package adapter
 
 import (
 	"errors"
+	"go.lumeweb.com/portal/db/models"
+	"gorm.io/gorm"
 	"testing"
 
 	"go.lumeweb.com/portal/core"
 	coreTesting "go.lumeweb.com/portal/core/testing"
 	coreMocks "go.lumeweb.com/portal/core/testing/mocks"
 
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -45,8 +46,7 @@ func TestUserCheckerAccountExists(t *testing.T) {
 			name:   "user exists",
 			userID: 1,
 			setupMock: func(mockSvc *coreMocks.MockUserService) {
-				mockSvc.On("Exists", mock.Anything, map[string]any{"id": uint(1)}).
-					Return(true, struct{ ID uint }{ID: 1}, nil)
+				mockSvc.On("AccountExists", uint(1)).Return(true, &models.User{Model: gorm.Model{ID: 1}}, nil)
 			},
 			expectExist: true,
 			expectErr:   false,
@@ -55,18 +55,17 @@ func TestUserCheckerAccountExists(t *testing.T) {
 			name:   "user does not exist",
 			userID: 999,
 			setupMock: func(mockSvc *coreMocks.MockUserService) {
-				mockSvc.On("Exists", mock.Anything, map[string]any{"id": uint(999)}).
-					Return(false, nil, nil)
+				mockSvc.On("AccountExists", uint(999)).
+					Return(false, nil, gorm.ErrRecordNotFound)
 			},
 			expectExist: false,
-			expectErr:   false,
+			expectErr:   true,
 		},
 		{
 			name:   "error checking existence",
 			userID: 1,
 			setupMock: func(mockSvc *coreMocks.MockUserService) {
-				mockSvc.On("Exists", mock.Anything, map[string]any{"id": uint(1)}).
-					Return(false, nil, errors.New("database error"))
+				mockSvc.On("AccountExists", uint(1)).Return(false, nil, errors.New("database error"))
 			},
 			expectExist: false,
 			expectErr:   true,
@@ -199,8 +198,8 @@ func TestNewUserCheckerFromCore(t *testing.T) {
 	mockUserSvc := coreMocks.NewMockUserService(t)
 
 	// Set up expectations
-	mockUserSvc.On("Exists", mock.Anything, map[string]any{"id": uint(1)}).
-		Return(true, struct{ ID uint }{ID: 1}, nil)
+	mockUserSvc.On("AccountExists", uint(1)).
+		Return(true, &models.User{Model: gorm.Model{ID: 1}}, nil)
 	mockUserSvc.On("IsAccountVerified", uint(1)).Return(true, nil)
 
 	// Register the mock service with the testing context
