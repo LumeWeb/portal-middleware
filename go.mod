@@ -10,8 +10,8 @@ require (
 	github.com/gorilla/mux v1.8.2-0.20240619235004-db9d1d0073d2
 	github.com/rs/cors v1.11.1
 	github.com/stretchr/testify v1.10.0
-	go.lumeweb.com/gswagger v0.0.0-20250525010100-211a7b47711a
-	go.lumeweb.com/httputil v0.3.5-0.20250525011818-13cddf14cc4f
+	go.lumeweb.com/gswagger v0.11.0
+	go.lumeweb.com/httputil v0.4.0
 	go.lumeweb.com/portal v0.4.2-0.20250504192002-4547d95e5a02
 	go.sia.tech/coreutils v0.12.1
 )
