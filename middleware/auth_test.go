@@ -2,6 +2,7 @@ package middleware
 
 import (
 	gjwt "github.com/golang-jwt/jwt/v5"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/mock"
 	"go.lumeweb.com/portal-middleware/auth/adapter"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
@@ -41,46 +42,50 @@ func TestAuthMiddleware(t *testing.T) {
 
 		// Create test handler to verify context values
 		handlerCalled := false
-		testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			handlerCalled = true
-
-			// Verify user ID was set in context
-			userID, err := mo.GetUserID(r.Context())
-			assert.NoError(t, err)
-			assert.Equal(t, uint(123), userID)
-
-			w.WriteHeader(http.StatusOK)
-		})
-
-		// Create test request with valid token
+		e := echo.New()
 		req := httptest.NewRequest("GET", "/", nil)
 		token := createTestToken(t, ctx, "123", "test-purpose")
 		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
 
-		rr := httptest.NewRecorder()
-		handler := middleware(testHandler)
-		handler.ServeHTTP(rr, req)
+		handlerCalled = false
+		testHandler := func(c echo.Context) error {
+			handlerCalled = true
 
+			// Verify user ID was set in context
+			userID, err := mo.GetUserID(c)
+			assert.NoError(t, err)
+			assert.Equal(t, uint(123), userID)
+
+			return c.NoContent(http.StatusOK)
+		}
+
+		// Apply middleware and call handler
+		err = middleware(testHandler)(c)
+		assert.NoError(t, err)
 		assert.True(t, handlerCalled)
-		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, http.StatusOK, rec.Code)
 	})
 
 	t.Run("empty allowed", func(t *testing.T) {
 		middleware := AuthMiddleware(ctx, "test-purpose", WithAuthEmptyAllowed(true))
 
-		handlerCalled := false
-		testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			handlerCalled = true
-			w.WriteHeader(http.StatusOK)
-		})
-
+		e := echo.New()
 		req := httptest.NewRequest("GET", "/", nil) // No token
-		rr := httptest.NewRecorder()
-		handler := middleware(testHandler)
-		handler.ServeHTTP(rr, req)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
 
+		handlerCalled := false
+		testHandler := func(c echo.Context) error {
+			handlerCalled = true
+			return c.NoContent(http.StatusOK)
+		}
+
+		err = middleware(testHandler)(c)
+		assert.NoError(t, err)
 		assert.True(t, handlerCalled)
-		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, http.StatusOK, rec.Code)
 	})
 
 	t.Run("expired allowed", func(t *testing.T) {
@@ -92,34 +97,33 @@ func TestAuthMiddleware(t *testing.T) {
 			WithAuthValidator(mockValidator), // Use our mock validator
 		)
 
-		handlerCalled := false
-		testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			handlerCalled = true
-
-			// Verify user ID was set from the expired token
-			userID, err := mcontext.GetUserID(r.Context())
-			assert.NoError(t, err)
-			assert.Equal(t, uint(123), userID)
-
-			w.WriteHeader(http.StatusOK)
-		})
-
-		// Create expired token
+		e := echo.New()
 		req := httptest.NewRequest("GET", "/", nil)
 		token := createTestToken(t, ctx, "123", "test-purpose", -time.Hour) // Expired 1 hour ago
 		req.Header.Set("Authorization", "Bearer "+token)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
 
 		claim := &gjwt.RegisteredClaims{Subject: "123"}
-
 		mockValidator.On("ValidateWithClaims", token, jwt.Purpose("test-purpose"), mock.Anything).
 			Return(claim, claim, nil)
 
-		rr := httptest.NewRecorder()
-		handler := middleware(testHandler)
-		handler.ServeHTTP(rr, req)
+		handlerCalled := false
+		testHandler := func(c echo.Context) error {
+			handlerCalled = true
 
+			// Verify user ID was set from the expired token
+			userID, err := mcontext.GetUserID(c)
+			assert.NoError(t, err)
+			assert.Equal(t, uint(123), userID)
+
+			return c.NoContent(http.StatusOK)
+		}
+
+		err = middleware(testHandler)(c)
+		assert.NoError(t, err)
 		assert.True(t, handlerCalled)
-		assert.Equal(t, http.StatusOK, rr.Code)
+		assert.Equal(t, http.StatusOK, rec.Code)
 		mockValidator.AssertExpectations(t)
 	})
 }

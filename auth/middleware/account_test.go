@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/require"
 	"go.lumeweb.com/portal-middleware/auth"
 	"net/http"
 	"net/http/httptest"
@@ -22,37 +24,56 @@ func TestAccountVerifiedMiddleware(t *testing.T) {
 		req = req.WithContext(context.WithValue(req.Context(), mcontext.UserIDKey, uint(1)))
 		w := httptest.NewRecorder()
 
-		middleware(testHandler).ServeHTTP(w, req)
+		e := echo.New()
+		c := e.NewContext(req, w)
+		c.Set(string(mcontext.UserIDKey), uint(1))
+
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
+		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 
 	t.Run("unverified user", func(t *testing.T) {
 		mockChecker.On("IsAccountVerified", uint(2)).Return(false, nil)
 
+		e := echo.New()
 		req := httptest.NewRequest("GET", "/", nil)
-		req = req.WithContext(context.WithValue(req.Context(), mcontext.UserIDKey, uint(2)))
-		w := httptest.NewRecorder()
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(string(mcontext.UserIDKey), uint(2))
 
-		middleware(testHandler).ServeHTTP(w, req)
-		assert.Equal(t, http.StatusForbidden, w.Code)
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
+		assert.Equal(t, echo.ErrForbidden, err)
 	})
 
 	t.Run("no user in context", func(t *testing.T) {
+		e := echo.New()
 		req := httptest.NewRequest("GET", "/", nil)
-		w := httptest.NewRecorder()
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
 
-		middleware(testHandler).ServeHTTP(w, req)
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
+		assert.Equal(t, echo.ErrUnauthorized, err)
 	})
 
 	t.Run("service error", func(t *testing.T) {
 		mockChecker.On("IsAccountVerified", uint(3)).Return(false, assert.AnError)
 
+		e := echo.New()
 		req := httptest.NewRequest("GET", "/", nil)
-		req = req.WithContext(context.WithValue(req.Context(), mcontext.UserIDKey, uint(3)))
-		w := httptest.NewRecorder()
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.Set(string(mcontext.UserIDKey), uint(3))
 
-		middleware(testHandler).ServeHTTP(w, req)
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
+		assert.Equal(t, echo.ErrInternalServerError, err)
 	})
 }

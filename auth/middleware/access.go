@@ -1,33 +1,26 @@
 package middleware
 
 import (
+	"github.com/labstack/echo/v4"
 	"go.lumeweb.com/portal-middleware/auth"
-	"net/http"
-
 	"go.lumeweb.com/portal-middleware/context"
 )
 
-// AccessMiddleware creates HTTP middleware for role-based access control.
+// AccessMiddleware creates Echo middleware for role-based access control.
 // Verifies both user existence and access permissions before allowing request progression.
 // Chain with AuthMiddleware to ensure user context is available.
-// Returns 401 Unauthorized for invalid users, 403 Forbidden for access denials.
-func AccessMiddleware(checker auth.UserChecker, accessChecker auth.AccessChecker) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			deny := func() {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-			}
-
-			userID, err := mcontext.GetUserID(r.Context())
+func AccessMiddleware(checker auth.UserChecker, accessChecker auth.AccessChecker) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			r := c.Request()
+			userID, err := mcontext.GetUserID(c)
 			if err != nil {
-				deny()
-				return
+				return echo.ErrUnauthorized
 			}
 
 			exists, err := checker.AccountExists(userID)
 			if err != nil || !exists {
-				deny()
-				return
+				return echo.ErrUnauthorized
 			}
 
 			host := r.Host
@@ -36,15 +29,13 @@ func AccessMiddleware(checker auth.UserChecker, accessChecker auth.AccessChecker
 			}
 			ok, err := accessChecker.CheckAccess(userID, host, r.URL.Path, r.Method)
 			if err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				return
+				return echo.ErrInternalServerError
 			}
 			if !ok {
-				deny()
-				return
+				return echo.ErrUnauthorized
 			}
 
-			next.ServeHTTP(w, r)
-		})
+			return next(c)
+		}
 	}
 }

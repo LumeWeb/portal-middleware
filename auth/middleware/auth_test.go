@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	"errors"
+	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/mock"
 	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal-middleware/auth/adapter"
@@ -58,27 +59,27 @@ func TestAuthMiddleware(t *testing.T) {
 		req := httptest.NewRequest("GET", "/", nil)
 		req.Header.Set("Authorization", "Bearer valid.token")
 
-		// Custom handler to verify context values
 		handlerCalled := false
-		testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		e := echo.New()
+		c := e.NewContext(req, rr)
+		err := middleware(func(c echo.Context) error {
 			handlerCalled = true
 
 			// Verify user ID was set in context
-			userID, err := mcontext.GetUserID(r.Context())
-			assert.NoError(t, err)
+			// Verify user ID was set in context
+			userID, err := mcontext.GetUserID(c)
+			require.NoError(t, err)
 			assert.Equal(t, uint(123), userID)
 
 			// Verify auth token was set in context
-			authToken, err := mcontext.GetAuthToken(r.Context())
-			assert.NoError(t, err)
+			authToken, err := mcontext.GetAuthToken(c)
+			require.NoError(t, err)
 			assert.Equal(t, "valid.token", authToken)
 
-			w.WriteHeader(http.StatusOK)
-		})
-
-		handler := middleware(testHandler)
-		handler.ServeHTTP(rr, req)
-
+			return c.NoContent(http.StatusOK)
+		})(c)
+		require.NoError(t, err)
 		assert.True(t, handlerCalled)
 		assert.Equal(t, http.StatusOK, rr.Code)
 		mockConfig.AssertExpectations(t)
@@ -100,10 +101,16 @@ func TestAuthMiddleware(t *testing.T) {
 		})
 
 		rr := httptest.NewRecorder()
-		handler := middleware(testHandler)
-		handler.ServeHTTP(rr, req)
+		e := echo.New()
+		c := e.NewContext(req, rr)
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
 
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Error(t, err)
+		httpErr, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusUnauthorized, httpErr.Code)
 	})
 
 	t.Run("expired but allowed", func(t *testing.T) {
@@ -123,9 +130,12 @@ func TestAuthMiddleware(t *testing.T) {
 		})
 
 		rr := httptest.NewRecorder()
-		handler := middleware(testHandler)
-		handler.ServeHTTP(rr, req)
-
+		e := echo.New()
+		c := e.NewContext(req, rr)
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
+		assert.NoError(t, err)
 		assert.Equal(t, http.StatusOK, rr.Code)
 	})
 
@@ -144,10 +154,15 @@ func TestAuthMiddleware(t *testing.T) {
 		})
 
 		rr := httptest.NewRecorder()
-		handler := middleware(testHandler)
-		handler.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		e := echo.New()
+		c := e.NewContext(req, rr)
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
+		assert.Error(t, err)
+		httpErr, ok := err.(*echo.HTTPError)
+		assert.True(t, ok)
+		assert.Equal(t, http.StatusUnauthorized, httpErr.Code)
 	})
 
 	t.Run("custom claims registration", func(t *testing.T) {
@@ -184,14 +199,16 @@ func TestAuthMiddleware(t *testing.T) {
 		req.Header.Set("Authorization", "Bearer valid.token")
 
 		rr := httptest.NewRecorder()
-		customHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			claims, ok := auth.GetClaims[*CustomClaims](r.Context())
-			assert.True(t, ok, "should retrieve custom claims")
+		e := echo.New()
+		c := e.NewContext(req, rr)
+		err := middleware(func(c echo.Context) error {
+			claims, ok := auth.GetClaims[*CustomClaims](c.Request().Context())
+			require.True(t, ok, "should retrieve custom claims")
+			require.NotNil(t, claims, "claims should not be nil")
 			assert.Equal(t, "test_value", claims.CustomField)
-			w.WriteHeader(http.StatusOK)
-		})
-		handler := middleware(customHandler)
-		handler.ServeHTTP(rr, req)
+			return c.NoContent(http.StatusOK)
+		})(c)
+		assert.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		mockValidator.AssertExpectations(t)
@@ -260,15 +277,30 @@ func TestAuthMiddleware_DefaultRegisteredClaims(t *testing.T) {
 		})
 
 		rr := httptest.NewRecorder()
-		handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Should be able to get base claims
-			claims, ok := auth.GetClaims[*gjwt.RegisteredClaims](r.Context())
+		e := echo.New()
+		c := e.NewContext(req, rr)
+		err = middleware(func(c echo.Context) error {
+			// Verify user ID was set in context
+			userID, err := mcontext.GetUserID(c)
+			require.NoError(t, err)
+			assert.Equal(t, uint(123), userID)
+
+			// Verify auth token was set in context
+			authToken, err := mcontext.GetAuthToken(c)
+			require.NoError(t, err)
+			assert.Equal(t, validToken, authToken)
+
+			// Verify claims wrapper exists
+			claimsWrapper := c.Request().Context().Value(mcontext.ClaimsContextKey)
+			require.NotNil(t, claimsWrapper)
+			
+			// Get base claims
+			claims, ok := auth.GetClaims[*gjwt.RegisteredClaims](c.Request().Context())
 			assert.True(t, ok)
 			assert.Equal(t, "123", claims.Subject)
-			w.WriteHeader(http.StatusOK)
-		}))
-		handler.ServeHTTP(rr, req)
-
+			return c.NoContent(http.StatusOK)
+		})(c)
+		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, rr.Code)
 		mockValidator.AssertExpectations(t)
 	})
@@ -300,18 +332,20 @@ func TestAuthMiddleware_DefaultRegisteredClaims(t *testing.T) {
 		})
 
 		rr := httptest.NewRecorder()
-		handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		e := echo.New()
+		c := e.NewContext(req, rr)
+		err = middleware(func(c echo.Context) error {
 			// Should only get base claims
-			claims, ok := auth.GetClaims[*gjwt.RegisteredClaims](r.Context())
+			claims, ok := auth.GetClaims[*gjwt.RegisteredClaims](c.Request().Context())
 			assert.True(t, ok)
 			assert.Equal(t, "123", claims.Subject)
 
 			// Should not get custom claims
-			_, ok = auth.GetClaims[*CustomClaims](r.Context())
+			_, ok = auth.GetClaims[*CustomClaims](c.Request().Context())
 			assert.False(t, ok)
-			w.WriteHeader(http.StatusOK)
-		}))
-		handler.ServeHTTP(rr, req)
+			return c.NoContent(http.StatusOK)
+		})(c)
+		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		mockValidator.AssertExpectations(t)
@@ -371,14 +405,15 @@ func TestAuthMiddleware_CustomClaims(t *testing.T) {
 		})
 
 		rr := httptest.NewRecorder()
-		customHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			claims, ok := auth.GetClaims[*CustomClaims](r.Context())
+		e := echo.New()
+		c := e.NewContext(req, rr)
+		err = middleware(func(c echo.Context) error {
+			claims, ok := auth.GetClaims[*CustomClaims](c.Request().Context())
 			assert.True(t, ok)
 			assert.Equal(t, "admin", claims.Role)
-			w.WriteHeader(http.StatusOK)
-		})
-		handler := middleware(customHandler)
-		handler.ServeHTTP(rr, req)
+			return c.NoContent(http.StatusOK)
+		})(c)
+		require.NoError(t, err)
 
 		assert.Equal(t, http.StatusOK, rr.Code)
 		mockValidator.AssertExpectations(t)
@@ -413,13 +448,14 @@ func TestAuthMiddleware_CustomClaims(t *testing.T) {
 		})
 
 		rr := httptest.NewRecorder()
-		handler := middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		e := echo.New()
+		c := e.NewContext(req, rr)
+		err = middleware(func(c echo.Context) error {
 			t.Error("Handler should not be called for invalid claim types")
-		}))
+			return c.NoContent(http.StatusOK)
+		})(c)
 
-		handler.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+		assert.Equal(t, echo.ErrUnauthorized, err)
 		mockValidator.AssertExpectations(t)
 	})
 }
@@ -460,10 +496,15 @@ func TestAuthMiddleware_ValidationErrors(t *testing.T) {
 			ExpectedClaims: &CustomClaims{},
 		})
 
-		rr := httptest.NewRecorder()
-		handler := middleware(testHandler)
-		handler.ServeHTTP(rr, req)
+		e := echo.New()
+		e.Use(middleware)
+		e.GET("/", func(c echo.Context) error {
+			t.Error("Handler should not be reached for invalid token")
+			return c.NoContent(http.StatusOK)
+		})
 
+		rr := httptest.NewRecorder()
+		e.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 
@@ -483,10 +524,15 @@ func TestAuthMiddleware_ValidationErrors(t *testing.T) {
 			ExpectedClaims: &CustomClaims{},
 		})
 
-		rr := httptest.NewRecorder()
-		handler := middleware(testHandler)
-		handler.ServeHTTP(rr, req)
+		e := echo.New()
+		e.Use(middleware)
+		e.GET("/", func(c echo.Context) error {
+			t.Error("Handler should not be reached for malformed claims")
+			return c.NoContent(http.StatusOK)
+		})
 
+		rr := httptest.NewRecorder()
+		e.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code)
 	})
 }
@@ -502,7 +548,7 @@ func TestClaimsContext(t *testing.T) {
 	customClaims := &CustomClaims{FeatureFlag: true}
 
 	// Store claims
-	ctx = context.WithValue(ctx, auth.ClaimsContextKey{}, auth.NewClaimsWrapper(baseClaims, customClaims))
+	ctx = context.WithValue(ctx, mcontext.ClaimsContextKey, auth.NewClaimsWrapper(baseClaims, customClaims))
 
 	t.Run("get custom claims", func(t *testing.T) {
 		claims, ok := auth.GetClaims[*CustomClaims](ctx)

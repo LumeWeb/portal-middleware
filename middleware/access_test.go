@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"context"
 	"errors"
+	"github.com/labstack/echo/v4"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,40 +20,43 @@ import (
 func testAccessMiddlewareHelper(t *testing.T, tests []struct {
 	name                    string
 	setupContext            func() core.Context
-	customMiddlewareFactory func(core.Context) func(http.Handler) http.Handler // Add this field
+	customMiddlewareFactory func(core.Context) echo.MiddlewareFunc // Updated to echo.MiddlewareFunc
 	userID                  uint
 	path                    string
 	expectedStatus          int
-}, createMiddleware func(core.Context) func(http.Handler) http.Handler) {
+}, createMiddleware func(core.Context) echo.MiddlewareFunc) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			coreCtx := tt.setupContext()
-			var ms func(http.Handler) http.Handler
+			var ms echo.MiddlewareFunc
 
 			// Check if a custom middleware factory is provided in the test case
 			if tt.customMiddlewareFactory != nil {
 				ms = tt.customMiddlewareFactory(coreCtx)
 			} else {
-				// This branch is likely not needed anymore if all tests use custom factories
-				// but keeping it for completeness if you have other tests using the default.
 				ms = createMiddleware(coreCtx)
 			}
 
-			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
+			e := echo.New()
+			e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+				return func(c echo.Context) error {
+					if tt.userID > 0 {
+						c.Set(string(mo.UserIDKey), tt.userID)
+					}
+					return next(c)
+				}
 			})
-			handler := ms(testHandler)
+			e.Use(ms)
+			e.GET(tt.path, func(c echo.Context) error {
+				return c.NoContent(http.StatusOK)
+			})
 
 			req := httptest.NewRequest("GET", tt.path, nil)
-			if tt.userID > 0 {
-				reqCtx := context.WithValue(req.Context(), mo.UserIDKey, tt.userID)
-				req = req.WithContext(reqCtx)
-			}
 			req.Host = "example.com"
-
-			w := httptest.NewRecorder()
-			handler.ServeHTTP(w, req)
-			assert.Equal(t, tt.expectedStatus, w.Code, "Expected status code %d, got %d", tt.expectedStatus, w.Code)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			
+			assert.Equal(t, tt.expectedStatus, rec.Code, "Expected status code %d, got %d", tt.expectedStatus, rec.Code)
 		})
 	}
 }
@@ -62,7 +65,7 @@ func TestAccessMiddleware(t *testing.T) {
 	tests := []struct {
 		name                    string
 		setupContext            func() core.Context
-		customMiddlewareFactory func(core.Context) func(http.Handler) http.Handler // Add this field
+		customMiddlewareFactory func(core.Context) echo.MiddlewareFunc
 		userID                  uint
 		path                    string
 		expectedStatus          int
@@ -74,7 +77,7 @@ func TestAccessMiddleware(t *testing.T) {
 				// because we will mock the adapter interfaces directly.
 				return coreTesting.NewTestContext(t)
 			},
-			customMiddlewareFactory: func(coreCtx core.Context) func(http.Handler) http.Handler {
+			customMiddlewareFactory: func(coreCtx core.Context) echo.MiddlewareFunc {
 				// Create mocks for the interfaces the middleware directly uses
 				mockUserChecker := auth.NewMockUserChecker(t)     // Use auth.NewMockUserChecker
 				mockAccessChecker := auth.NewMockAccessChecker(t) // Use auth.NewMockAccessChecker
@@ -85,7 +88,7 @@ func TestAccessMiddleware(t *testing.T) {
 					Return(true, nil).Once()
 
 				// Instantiate the middleware with the mocked interfaces
-				return authMiddleware.AccessMiddleware(mockUserChecker, mockAccessChecker) // Use authMiddleware
+				return authMiddleware.AccessMiddleware(mockUserChecker, mockAccessChecker)
 			},
 			userID:         1,
 			path:           "/allowed",
@@ -96,7 +99,7 @@ func TestAccessMiddleware(t *testing.T) {
 			setupContext: func() core.Context {
 				return coreTesting.NewTestContext(t)
 			},
-			customMiddlewareFactory: func(coreCtx core.Context) func(http.Handler) http.Handler {
+			customMiddlewareFactory: func(coreCtx core.Context) echo.MiddlewareFunc {
 				mockUserChecker := auth.NewMockUserChecker(t)
 				mockAccessChecker := auth.NewMockAccessChecker(t)
 
@@ -115,7 +118,7 @@ func TestAccessMiddleware(t *testing.T) {
 			setupContext: func() core.Context {
 				return coreTesting.NewTestContext(t)
 			},
-			customMiddlewareFactory: func(coreCtx core.Context) func(http.Handler) http.Handler {
+			customMiddlewareFactory: func(coreCtx core.Context) echo.MiddlewareFunc {
 				mockUserChecker := auth.NewMockUserChecker(t)
 				mockAccessChecker := auth.NewMockAccessChecker(t)
 
@@ -134,7 +137,7 @@ func TestAccessMiddleware(t *testing.T) {
 			setupContext: func() core.Context {
 				return coreTesting.NewTestContext(t)
 			},
-			customMiddlewareFactory: func(coreCtx core.Context) func(http.Handler) http.Handler {
+			customMiddlewareFactory: func(coreCtx core.Context) echo.MiddlewareFunc {
 				mockUserChecker := auth.NewMockUserChecker(t)
 				mockAccessChecker := auth.NewMockAccessChecker(t)
 
@@ -153,11 +156,10 @@ func TestAccessMiddleware(t *testing.T) {
 			setupContext: func() core.Context {
 				return coreTesting.NewTestContext(t)
 			},
-			customMiddlewareFactory: func(coreCtx core.Context) func(http.Handler) http.Handler {
+			customMiddlewareFactory: func(coreCtx core.Context) echo.MiddlewareFunc {
 				mockUserChecker := auth.NewMockUserChecker(t)
 				mockAccessChecker := auth.NewMockAccessChecker(t)
 
-				// Neither AccountExists nor CheckAccess should be called if no user in context
 				// Neither AccountExists nor CheckAccess should be called if no user in context
 				mockUserChecker.On("AccountExists", mock.Anything).Return(false, nil).Maybe()
 				mockAccessChecker.On("CheckAccess", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(false, nil).Maybe()

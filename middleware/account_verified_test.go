@@ -1,8 +1,8 @@
 package middleware
 
 import (
-	"context"
 	"errors"
+	"github.com/labstack/echo/v4"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,26 +20,31 @@ func testAccountVerifiedMiddlewareHelper(t *testing.T, tests []struct {
 	userID         uint
 	path           string
 	expectedStatus int
-}, createMiddleware func(core.Context) func(http.Handler) http.Handler) {
+}, createMiddleware func(core.Context) echo.MiddlewareFunc) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			coreCtx := tt.setupContext()
 			middleware := createMiddleware(coreCtx)
 
-			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
+			e := echo.New()
+			e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+				return func(c echo.Context) error {
+					if tt.userID > 0 {
+						c.Set(string(mo.UserIDKey), tt.userID)
+					}
+					return next(c)
+				}
 			})
-			handler := middleware(testHandler)
+			e.Use(middleware)
+			e.GET(tt.path, func(c echo.Context) error {
+				return c.NoContent(http.StatusOK)
+			})
 
 			req := httptest.NewRequest("GET", tt.path, nil)
-			if tt.userID > 0 {
-				reqCtx := context.WithValue(req.Context(), mo.UserIDKey, tt.userID)
-				req = req.WithContext(reqCtx)
-			}
-
-			w := httptest.NewRecorder()
-			handler.ServeHTTP(w, req)
-			assert.Equal(t, tt.expectedStatus, w.Code, "Expected status code %d, got %d", tt.expectedStatus, w.Code)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			
+			assert.Equal(t, tt.expectedStatus, rec.Code, "Expected status code %d, got %d", tt.expectedStatus, rec.Code)
 		})
 	}
 }
@@ -106,5 +111,7 @@ func TestAccountVerifiedMiddleware(t *testing.T) {
 		},
 	}
 
-	testAccountVerifiedMiddlewareHelper(t, tests, AccountVerifiedMiddleware)
+	testAccountVerifiedMiddlewareHelper(t, tests, func(ctx core.Context) echo.MiddlewareFunc {
+		return AccountVerifiedMiddleware(ctx)
+	})
 }

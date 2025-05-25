@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/ed25519"
 	gjwt "github.com/golang-jwt/jwt/v5"
+	mcontext "go.lumeweb.com/portal-middleware/context"
 	"net/http"
 	"strings"
 )
@@ -98,9 +99,6 @@ func FindAuthToken(r *http.Request, secretKey ed25519.PrivateKey, cookieName str
 	return ""
 }
 
-// claimsContextKey is used to store claims in request context
-type ClaimsContextKey struct{}
-
 // claimsWrapper contains both base and custom claims
 type claimsWrapper struct {
 	Base   *gjwt.RegisteredClaims
@@ -114,11 +112,11 @@ func NewClaimsWrapper(base *gjwt.RegisteredClaims, custom gjwt.Claims) *claimsWr
 	}
 }
 
-// GetClaims retrieves claims from context by type
+// GetClaims retrieves claims from echo.Context by type
 func GetClaims[T gjwt.Claims](ctx context.Context) (T, bool) {
 	var zero T
 
-	val := ctx.Value(ClaimsContextKey{})
+	val := ctx.Value(mcontext.ClaimsContextKey)
 	if val == nil {
 		return zero, false
 	}

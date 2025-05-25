@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"context"
+	echo "github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	mo "go.lumeweb.com/portal-middleware/context"
@@ -80,20 +80,29 @@ func TestNewAccessMiddlewareFromCore(t *testing.T) {
 			middleware := NewAccessMiddlewareFromCore(ctx)
 			require.NotNil(t, middleware)
 
-			testHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.WriteHeader(http.StatusOK)
-			})
-			handler := middleware(testHandler)
-
+			e := echo.New()
 			req := httptest.NewRequest("GET", "http://example.com/api", nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
 			if tc.userID != 0 {
-				req = req.WithContext(context.WithValue(req.Context(), mo.UserIDKey, tc.userID))
+				c.Set(string(mo.UserIDKey), tc.userID)
 			}
 
-			w := httptest.NewRecorder()
-			handler.ServeHTTP(w, req)
+			handler := middleware(func(c echo.Context) error {
+				return c.NoContent(http.StatusOK)
+			})
 
-			assert.Equal(t, tc.expectedStatus, w.Code)
+			err := handler(c)
+			if tc.expectedStatus != http.StatusOK {
+				require.Error(t, err)
+				httpErr, ok := err.(*echo.HTTPError)
+				require.True(t, ok)
+				assert.Equal(t, tc.expectedStatus, httpErr.Code)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.expectedStatus, rec.Code)
+			}
 			mockUserSvc.AssertExpectations(t)
 			mockAccessSvc.AssertExpectations(t)
 		})

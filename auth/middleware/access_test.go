@@ -2,6 +2,8 @@ package middleware
 
 import (
 	"context"
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/require"
 	"go.lumeweb.com/portal-middleware/auth"
 	"net/http"
 	"net/http/httptest"
@@ -12,7 +14,7 @@ import (
 	coreMocks "go.lumeweb.com/portal/core/testing/mocks"
 )
 
-func setupAccessTest(t *testing.T) (*auth.MockUserChecker, *coreMocks.MockAccessService, func(http.Handler) http.Handler) {
+func setupAccessTest(t *testing.T) (*auth.MockUserChecker, *coreMocks.MockAccessService, echo.MiddlewareFunc) {
 	mockUserChecker := auth.NewMockUserChecker(t)
 	mockAccessChecker := coreMocks.NewMockAccessService(t)
 	middleware := AccessMiddleware(mockUserChecker, mockAccessChecker)
@@ -31,7 +33,14 @@ func TestAccessMiddleware(t *testing.T) {
 		req = req.WithContext(context.WithValue(req.Context(), mcontext.UserIDKey, uint(1)))
 		w := httptest.NewRecorder()
 
-		middleware(testHandler).ServeHTTP(w, req)
+		e := echo.New()
+		c := e.NewContext(req, w)
+		c.Set(string(mcontext.UserIDKey), uint(1))
+
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
+		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
 
@@ -45,8 +54,14 @@ func TestAccessMiddleware(t *testing.T) {
 		req = req.WithContext(context.WithValue(req.Context(), mcontext.UserIDKey, uint(2)))
 		w := httptest.NewRecorder()
 
-		middleware(testHandler).ServeHTTP(w, req)
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		e := echo.New()
+		c := e.NewContext(req, w)
+		c.Set(string(mcontext.UserIDKey), uint(2))
+
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
+		assert.Equal(t, echo.ErrUnauthorized, err)
 	})
 
 	t.Run("user not found", func(t *testing.T) {
@@ -58,8 +73,14 @@ func TestAccessMiddleware(t *testing.T) {
 		req = req.WithContext(context.WithValue(req.Context(), mcontext.UserIDKey, uint(3)))
 		w := httptest.NewRecorder()
 
-		middleware(testHandler).ServeHTTP(w, req)
-		assert.Equal(t, http.StatusUnauthorized, w.Code)
+		e := echo.New()
+		c := e.NewContext(req, w)
+		c.Set(string(mcontext.UserIDKey), uint(3))
+
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
+		assert.Equal(t, echo.ErrUnauthorized, err)
 	})
 
 	t.Run("access check error", func(t *testing.T) {
@@ -72,7 +93,13 @@ func TestAccessMiddleware(t *testing.T) {
 		req = req.WithContext(context.WithValue(req.Context(), mcontext.UserIDKey, uint(4)))
 		w := httptest.NewRecorder()
 
-		middleware(testHandler).ServeHTTP(w, req)
-		assert.Equal(t, http.StatusInternalServerError, w.Code)
+		e := echo.New()
+		c := e.NewContext(req, w)
+		c.Set(string(mcontext.UserIDKey), uint(4))
+
+		err := middleware(func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})(c)
+		assert.Equal(t, echo.ErrInternalServerError, err)
 	})
 }

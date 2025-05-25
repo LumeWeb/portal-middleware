@@ -1,37 +1,32 @@
 package middleware
 
 import (
+	"github.com/labstack/echo/v4"
 	"go.lumeweb.com/portal-middleware/auth"
-	"net/http"
-
 	"go.lumeweb.com/portal-middleware/context"
 )
 
-// AccountVerified creates HTTP middleware that requires verified user accounts.
+// AccountVerified creates Echo middleware that requires verified user accounts.
 // Checks the verification status of the user in the request context.
-// Returns 403 Forbidden if account is not verified, 500 for verification errors.
 // Must be used after AuthMiddleware to ensure user context exists.
-func AccountVerified(checker auth.UserChecker) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			userID, err := mcontext.GetUserID(r.Context())
+func AccountVerified(checker auth.UserChecker) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			userID, err := mcontext.GetUserID(c)
 			if err != nil {
-				http.Error(w, "Unauthorized", http.StatusUnauthorized)
-				return
+				return echo.ErrUnauthorized
 			}
 
 			verified, err := checker.IsAccountVerified(userID)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
+				return echo.ErrInternalServerError
 			}
 
 			if !verified {
-				http.Error(w, "Account not verified", http.StatusForbidden)
-				return
+				return echo.ErrForbidden
 			}
 
-			next.ServeHTTP(w, r)
-		})
+			return next(c)
+		}
 	}
 }
