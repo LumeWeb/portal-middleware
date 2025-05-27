@@ -244,11 +244,13 @@ func RegisterTusRoutes(
 			http.MethodOptions,
 			basePath,
 			dummyOptionsHandler,
-			router.WithSwagger(router.TusOptionsSwagger(
-				"Get TUS Server Capabilities",
-				"Retrieves information about the TUS server's supported versions, extensions, and limits.",
-				commonErrResp,
-			)),
+			router.WithSwaggerOptions(func(d *swagger.Definitions) {
+				*d = router.TusOptionsSwagger(
+					"Get TUS Server Capabilities", 
+					"Retrieves information about the TUS server's supported versions, extensions, and limits.",
+					commonErrResp,
+				)
+			}),
 			router.WithMiddlewares(mw...),
 		),
 	)
