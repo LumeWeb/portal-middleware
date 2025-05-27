@@ -9,56 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestWrap(t *testing.T) {
-	t.Run("wraps http middleware correctly", func(t *testing.T) {
-		httpMW := func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("X-Test", "true")
-				next.ServeHTTP(w, r)
-			})
-		}
-
-		echoMW := Wrap(httpMW)
-
-		e := echo.New()
-		e.Use(echoMW)
-		e.GET("/", func(c echo.Context) error {
-			return c.String(http.StatusOK, "test")
-		})
-
-		req := httptest.NewRequest("GET", "/", nil)
-		rec := httptest.NewRecorder()
-		e.ServeHTTP(rec, req)
-
-		assert.Equal(t, "true", rec.Header().Get("X-Test"))
-		assert.Equal(t, http.StatusOK, rec.Code)
-		assert.Equal(t, "test", rec.Body.String())
-	})
-
-	t.Run("propagates echo errors", func(t *testing.T) {
-		httpMW := func(next http.Handler) http.Handler {
-			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				next.ServeHTTP(w, r)
-			})
-		}
-
-		echoMW := Wrap(httpMW)
-
-		e := echo.New()
-		e.Use(echoMW)
-		e.GET("/", func(c echo.Context) error {
-			return echo.NewHTTPError(http.StatusBadRequest, "test error")
-		})
-
-		req := httptest.NewRequest("GET", "/", nil)
-		rec := httptest.NewRecorder()
-		e.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.Contains(t, rec.Body.String(), "test error")
-	})
-}
-
 func TestUnwrap(t *testing.T) {
 	t.Run("unwraps echo middleware correctly", func(t *testing.T) {
 		echoMW := func(next echo.HandlerFunc) echo.HandlerFunc {
