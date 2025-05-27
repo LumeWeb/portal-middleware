@@ -1,11 +1,11 @@
 package swagger
 
 import (
+	"go.lumeweb.com/portal-router"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	"github.com/gorilla/mux"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -34,10 +34,14 @@ func TestLoadAndValidateSpec(t *testing.T) {
 
 func TestWireRouter(t *testing.T) {
 	t.Run("wires routes correctly", func(t *testing.T) {
-		router := mux.NewRouter()
-		err := WireRouter(router, "/api/spec.json", "/docs")
+		_router, err := router.NewRouter(router.APIInfo().
+			Title("Test API").
+			Version("1.0.0"))
 		require.NoError(t, err)
-		
+
+		err = WireRouter(_router, "/api/spec.json", "/docs")
+		require.NoError(t, err)
+
 		tests := []struct {
 			method string
 			path   string
@@ -47,18 +51,21 @@ func TestWireRouter(t *testing.T) {
 			{"GET", "/docs/", http.StatusOK},
 			{"GET", "/docs/swagger-initializer.js", http.StatusOK},
 		}
-		
+
 		for _, tt := range tests {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			w := httptest.NewRecorder()
-			router.ServeHTTP(w, req)
+			_router.ServeHTTP(w, req)
 			assert.Equal(t, tt.status, w.Code, "path: %s", tt.path)
 		}
 	})
 
 	t.Run("invalid paths", func(t *testing.T) {
-		router := mux.NewRouter()
-		
+		_router, err := router.NewRouter(router.APIInfo().
+			Title("Test API").
+			Version("1.0.0"))
+		require.NoError(t, err)
+
 		tests := []struct {
 			name      string
 			specPath  string
@@ -84,10 +91,10 @@ func TestWireRouter(t *testing.T) {
 				expectErr: "uiPathPrefix must start with '/' and cannot be empty",
 			},
 		}
-		
+
 		for _, tt := range tests {
 			t.Run(tt.name, func(t *testing.T) {
-				err := WireRouter(router, tt.specPath, tt.uiPrefix)
+				err := WireRouter(_router, tt.specPath, tt.uiPrefix)
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), tt.expectErr)
 			})
@@ -106,20 +113,22 @@ func TestNewHandler(t *testing.T) {
 	}`)
 
 	t.Run("wires UI routes correctly", func(t *testing.T) {
-		router := mux.NewRouter()
-		err := NewHandler(mockSpec, router)
+		_router, err := router.NewRouter(router.APIInfo().
+			Title("Test API").
+			Version("1.0.0"))
 		require.NoError(t, err)
-		
-		// Test UI routes instead of spec endpoint
+
+		err = NewHandler(mockSpec, _router)
+		require.NoError(t, err)
+
 		req := httptest.NewRequest("GET", "/swagger", nil)
 		w := httptest.NewRecorder()
-		router.ServeHTTP(w, req)
-		
+		_router.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusMovedPermanently, w.Code)
-		
+
 		req = httptest.NewRequest("GET", "/swagger/", nil)
 		w = httptest.NewRecorder()
-		router.ServeHTTP(w, req)
+		_router.ServeHTTP(w, req)
 		assert.Equal(t, http.StatusOK, w.Code)
 		assert.Equal(t, "text/html; charset=utf-8", w.Header().Get("Content-Type"))
 	})
@@ -129,7 +138,7 @@ func TestNewStandaloneHandler(t *testing.T) {
 	t.Run("creates valid handler", func(t *testing.T) {
 		handler, err := NewStandaloneHandler("/api/spec.json", "/docs")
 		require.NoError(t, err)
-		
+
 		tests := []struct {
 			method string
 			path   string
@@ -138,7 +147,7 @@ func TestNewStandaloneHandler(t *testing.T) {
 			{"GET", "/docs", http.StatusMovedPermanently},
 			{"GET", "/docs/", http.StatusOK},
 		}
-		
+
 		for _, tt := range tests {
 			req := httptest.NewRequest(tt.method, tt.path, nil)
 			w := httptest.NewRecorder()

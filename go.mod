@@ -7,14 +7,12 @@ toolchain go1.23.7
 require (
 	github.com/getkin/kin-openapi v0.132.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
-	github.com/gorilla/mux v1.8.2-0.20240619235004-db9d1d0073d2
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/rs/cors v1.11.1
 	github.com/stretchr/testify v1.10.0
-	go.lumeweb.com/gswagger v0.15.0
-	go.lumeweb.com/httputil v0.4.2
+	go.lumeweb.com/gswagger v0.16.0
 	go.lumeweb.com/portal v0.4.2-0.20250504192002-4547d95e5a02
-	go.lumeweb.com/portal-router v0.1.8
+	go.lumeweb.com/portal-router v0.1.9
 	go.sia.tech/coreutils v0.12.1
 	gorm.io/gorm v1.25.12
 )
@@ -22,7 +20,6 @@ require (
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/AfterShip/email-verifier v1.4.1 // indirect
-	github.com/Oudwins/zog v0.18.4 // indirect
 	github.com/aws/aws-sdk-go-v2 v1.36.3 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.6.10 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.34 // indirect
@@ -56,6 +53,7 @@ require (
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gookit/event v1.1.2 // indirect
+	github.com/gorilla/mux v1.8.2-0.20240619235004-db9d1d0073d2 // indirect
 	github.com/gotd/contrib v0.21.0 // indirect
 	github.com/hbollon/go-edlib v1.6.0 // indirect
 	github.com/invopop/jsonschema v0.12.0 // indirect
@@ -104,7 +102,6 @@ require (
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
 	golang.org/x/crypto v0.38.0 // indirect
-	golang.org/x/exp v0.0.0-20250305212735-054e65f0b394 // indirect
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sys v0.33.0 // indirect
 	golang.org/x/text v0.25.0 // indirect
