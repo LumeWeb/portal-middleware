@@ -211,11 +211,13 @@ func RegisterTusRoutes(
 	// Helper to build route options based on auth requirements
 	buildRouteOptions := func(method string, path string, swaggerFn func(string, string, map[int]any) swagger.Definitions) router.RouteDefinition {
 		opts := router.DefineOptions(
-			router.WithSwagger(swaggerFn(
-				"TUS "+method+" "+path,
-				"TUS protocol "+method+" handler for "+path,
-				commonErrResp,
-			)),
+			router.WithSwaggerOptions(func(d *swagger.Definitions) {
+				*d = swaggerFn(
+					"TUS "+method+" "+path,
+					"TUS protocol "+method+" handler for "+path,
+					commonErrResp,
+				)
+			}),
 			router.WithMiddlewares(mw...),
 		)
 
