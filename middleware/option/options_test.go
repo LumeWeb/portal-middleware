@@ -1,8 +1,9 @@
-package middleware
+package option
 
 import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"go.lumeweb.com/portal-middleware/cors"
 	router "go.lumeweb.com/portal-router"
 	"go.lumeweb.com/portal/core"
 	coreTesting "go.lumeweb.com/portal/core/testing"
@@ -40,6 +41,30 @@ func TestWithMiddleware(t *testing.T) {
 	}
 
 	route := router.NewRoute("GET", "/test", handler, WithMiddleware(mw))
+
+	assert.Len(t, route.Middlewares, 1)
+}
+
+func TestWithCORS(t *testing.T) {
+	handler := func(c echo.Context) error { return nil }
+	route := router.NewRoute("GET", "/test", handler, WithCORS())
+
+	assert.Len(t, route.Middlewares, 1)
+}
+
+func TestWithCustomCORS(t *testing.T) {
+	handler := func(c echo.Context) error { return nil }
+	config := cors.Config{
+		AllowedMethods: []string{"GET"},
+	}
+	route := router.NewRoute("GET", "/test", handler, WithCustomCORS(config))
+
+	assert.Len(t, route.Middlewares, 1)
+}
+
+func TestWithTUSCORS(t *testing.T) {
+	handler := func(c echo.Context) error { return nil }
+	route := router.NewRoute("GET", "/test", handler, WithTUSCORS())
 
 	assert.Len(t, route.Middlewares, 1)
 }

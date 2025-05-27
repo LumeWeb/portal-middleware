@@ -10,9 +10,9 @@ require (
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/rs/cors v1.11.1
 	github.com/stretchr/testify v1.10.0
-	go.lumeweb.com/gswagger v0.16.0
+	go.lumeweb.com/gswagger v0.16.1
 	go.lumeweb.com/portal v0.4.2-0.20250504192002-4547d95e5a02
-	go.lumeweb.com/portal-router v0.1.9
+	go.lumeweb.com/portal-router v0.1.10
 	go.sia.tech/coreutils v0.12.1
 	gorm.io/gorm v1.25.12
 )

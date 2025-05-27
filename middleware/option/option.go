@@ -3,6 +3,7 @@ package option
 import (
 	"github.com/labstack/echo/v4"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
+	"go.lumeweb.com/portal-middleware/cors"
 	"go.lumeweb.com/portal-middleware/middleware"
 	router "go.lumeweb.com/portal-router"
 	"go.lumeweb.com/portal/core"
@@ -40,4 +41,19 @@ func WithMiddleware(mw ...echo.MiddlewareFunc) router.RouteOption {
 	return func(d *router.RouteDefinition) {
 		d.Middlewares = append(d.Middlewares, mw...)
 	}
+}
+
+// WithCORS enables CORS with default configuration
+func WithCORS() router.RouteOption {
+	return WithMiddleware(echo.WrapMiddleware(cors.NewWithDefaults(cors.Config{})))
+}
+
+// WithCustomCORS enables CORS with custom configuration
+func WithCustomCORS(config cors.Config) router.RouteOption {
+	return WithMiddleware(echo.WrapMiddleware(cors.NewWithDefaults(config)))
+}
+
+// WithTUSCORS enables CORS with TUS protocol defaults
+func WithTUSCORS() router.RouteOption {
+	return WithMiddleware(echo.WrapMiddleware(cors.NewWithTUSDefaults()))
 }
