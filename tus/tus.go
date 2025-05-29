@@ -211,7 +211,7 @@ func RegisterTusRoutes(
 	// Helper to build route options based on auth requirements
 	buildRouteOptions := func(method string, path string, swaggerFn func(string, string, map[int]any) swagger.Definitions) router.RouteDefinition {
 		opts := router.DefineOptions(
-			router.WithSwaggerOptions(func(d *swagger.Definitions) {
+			router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
 				*d = swaggerFn(
 					"TUS "+method+" "+path,
 					"TUS protocol "+method+" handler for "+path,
@@ -244,9 +244,9 @@ func RegisterTusRoutes(
 			http.MethodOptions,
 			basePath,
 			dummyOptionsHandler,
-			router.WithSwaggerOptions(func(d *swagger.Definitions) {
+			router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
 				*d = router.TusOptionsSwagger(
-					"Get TUS Server Capabilities", 
+					"Get TUS Server Capabilities",
 					"Retrieves information about the TUS server's supported versions, extensions, and limits.",
 					commonErrResp,
 				)
