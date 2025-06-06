@@ -184,11 +184,6 @@ func RegisterTusRoutes(
 	commonMiddleware ...echo.MiddlewareFunc,
 ) error {
 
-	subrouter, err := grouter.Group("")
-	if err != nil {
-		return err
-	}
-
 	// Create middleware chain
 	mw := router.Middlewares(
 		PathMiddleware(basePath, NewJWTLocModifier(core.AUTH_TOKEN_NAME)),
@@ -256,7 +251,7 @@ func RegisterTusRoutes(
 	)
 
 	return router.RegisterRoutes(
-		subrouter,
+		grouter,
 		accessSvc,
 		subdomain,
 		routes,
