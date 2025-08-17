@@ -27,7 +27,7 @@ func AccessMiddleware(checker auth.UserChecker, accessChecker auth.AccessChecker
 			if host == "" {
 				host = "localhost" // default if no host header
 			}
-			ok, err := accessChecker.CheckAccess(userID, host, r.URL.Path, r.Method)
+			ok, err := accessChecker.CheckAccess(userID, host, c.Path(), r.Method)
 			if err != nil {
 				return echo.ErrInternalServerError
 			}
