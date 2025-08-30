@@ -89,18 +89,8 @@ func (d *domainCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string,
 		return "", err
 	}
 
-	// Create domain-specific cookie
-	cookie := &http.Cookie{
-		Name:     config.GetAuthCookieName(),
-		Value:    tokenString,
-		Domain:   d.domain,
-		Path:     "/",
-		Expires:  time.Now().Add(expiry),
-		Secure:   true,
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	}
-	http.SetCookie(w, cookie)
+	// Use SetCookie internally
+	d.SetCookie(w, config.GetAuthCookieName(), tokenString, d.domain, "/", time.Now().Add(expiry), true, true, http.SameSiteStrictMode)
 
 	return tokenString, nil
 }
@@ -149,12 +139,29 @@ func (d *domainCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Reque
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
 		Value:    mainCookie.Value,
+		Expires:  exp.Time,
 		MaxAge:   int(time.Until(exp.Time).Seconds()),
 		Secure:   true,
 		HttpOnly: true,
 		Path:     "/",
 		Domain:   d.domain,
+		SameSite: http.SameSiteStrictMode,
 	})
+}
+
+// SetCookie implements CookieSetter interface for setting a generic cookie for a specific domain.
+func (d *domainCookieSetter) SetCookie(w http.ResponseWriter, name, value, domain, path string, expiry time.Time, secure, httpOnly bool, sameSite http.SameSite) {
+	cookie := &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Domain:   d.domain,
+		Path:     path,
+		Expires:  expiry,
+		Secure:   secure,
+		HttpOnly: httpOnly,
+		SameSite: sameSite,
+	}
+	http.SetCookie(w, cookie)
 }
 
 // NewChainedCookieSetter creates a CookieSetter that chains multiple setters
@@ -188,5 +195,12 @@ func (c *chainedCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Requ
 	// Call EchoAuthCookie on all setters, not just the first
 	for _, setter := range c.setters {
 		setter.EchoAuthCookie(w, r, opts...)
+	}
+}
+
+func (c *chainedCookieSetter) SetCookie(w http.ResponseWriter, name, value, domain, path string, expiry time.Time, secure, httpOnly bool, sameSite http.SameSite) {
+	// Call SetCookie on all setters
+	for _, setter := range c.setters {
+		setter.SetCookie(w, name, value, domain, path, expiry, secure, httpOnly, sameSite)
 	}
 }
