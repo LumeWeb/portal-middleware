@@ -47,3 +47,11 @@ func WithAuthValidator(validator validation.TokenValidator) AuthOption {
 func WithAuthJWTOptions(jwtOpts ...jwt.Option) AuthOption {
 	return middleware.WithJWTOptions(jwtOpts...)
 }
+
+// AuthErrorCallback defines a function type that takes a context and returns an error code and JSON serializable response
+type AuthErrorCallback = middleware.AuthErrorCallback
+
+// WithAuthErrorCallback sets a custom error callback function for authentication failures
+func WithAuthErrorCallback(callback AuthErrorCallback) AuthOption {
+	return middleware.WithErrorCallback(callback)
+}
