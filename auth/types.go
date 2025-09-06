@@ -13,9 +13,3 @@ type UserChecker interface {
 type AccessChecker interface {
 	CheckAccess(userID uint, host string, path string, method string) (bool, error)
 }
-
-// Auth token constants
-const (
-	AUTH_COOKIE_NAME = "auth_token"
-	AUTH_TOKEN_NAME  = "auth_token"
-)

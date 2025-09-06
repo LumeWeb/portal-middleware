@@ -2,7 +2,11 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"reflect"
+	"strconv"
+
 	gjwt "github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"go.lumeweb.com/portal-middleware/auth"
@@ -10,9 +14,10 @@ import (
 	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"go.lumeweb.com/portal-middleware/auth/validation"
 	mcontext "go.lumeweb.com/portal-middleware/context"
-	"reflect"
-	"strconv"
 )
+
+// AuthErrorCallback defines a function type that takes a context and returns an error code and JSON serializable response
+type AuthErrorCallback func(c echo.Context) (int, json.Marshaler)
 
 // AuthMiddlewareOption defines a functional option for configuring AuthMiddlewareOptions.
 // It modifies the settings or behavior of AuthMiddlewareOptions during initialization.
@@ -20,7 +25,6 @@ type AuthMiddlewareOption = func(*AuthMiddlewareOptions)
 
 // AuthMiddlewareOptions configures the authentication middleware behavior.
 // Contains settings for token validation, purpose restrictions, and error handling.
-// This struct is defined in auth/types.go to avoid duplication
 type AuthMiddlewareOptions struct {
 	Config         adapter.ConfigProvider
 	Validator      validation.TokenValidator
@@ -29,6 +33,17 @@ type AuthMiddlewareOptions struct {
 	ExpiredAllowed bool
 	Options        []jwt.Option
 	ExpectedClaims gjwt.Claims
+	ErrorCallback  AuthErrorCallback
+}
+
+// handleError processes authentication errors using the custom error callback if provided,
+// otherwise returns the default echo.ErrUnauthorized
+func (options *AuthMiddlewareOptions) handleError(c echo.Context) error {
+	if options.ErrorCallback != nil {
+		code, response := options.ErrorCallback(c)
+		return c.JSON(code, response)
+	}
+	return echo.ErrUnauthorized
 }
 
 // AuthMiddleware creates Echo middleware for JWT authentication
@@ -47,7 +62,7 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 			authToken := auth.FindAuthToken(r, options.Config.GetPrivateKey(), options.Config.GetAuthCookieName(), options.Config.GetAuthTokenName())
 			if authToken == "" {
 				if !options.EmptyAllowed {
-					return echo.ErrUnauthorized
+					return options.handleError(c)
 				}
 				return next(c)
 			}
@@ -69,28 +84,28 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 				if options.ExpiredAllowed && errors.Is(err, gjwt.ErrTokenExpired) {
 					// We still need baseClaims to proceed
 					if baseClaims == nil {
-						return echo.ErrUnauthorized
+						return options.handleError(c)
 					}
 				} else {
-					return echo.ErrUnauthorized
+					return options.handleError(c)
 				}
 			}
 
 			// If validation passed but we got nil claims, reject
 			if baseClaims == nil {
-				return echo.ErrUnauthorized
+				return options.handleError(c)
 			}
 
 			// If we got claims but they don't match expected type, reject
 			if customClaims != nil && !reflect.TypeOf(customClaims).AssignableTo(reflect.TypeOf(claimsType)) {
-				return echo.ErrUnauthorized
+				return options.handleError(c)
 			}
 
 			// Build context with all claims
 			if baseClaims != nil {
 				userID, err := strconv.ParseUint(baseClaims.Subject, 10, 64)
 				if err != nil {
-					return echo.ErrUnauthorized
+					return options.handleError(c)
 				}
 				c.Set(string(mcontext.UserIDKey), uint(userID))
 				c.Set(string(mcontext.AuthTokenKey), authToken)
@@ -107,7 +122,7 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 						// Check if types match directly or via pointer
 						if !actualType.AssignableTo(expectedClaimsType) &&
 							!actualType.AssignableTo(expectedPtrType) {
-							return echo.ErrUnauthorized
+							return options.handleError(c)
 						}
 					}
 					// Store claims in context
@@ -142,6 +157,7 @@ func NewAuthOptions(config adapter.ConfigProvider, purpose jwt.Purpose, opts ...
 		Purpose:        purpose,
 		EmptyAllowed:   false, // default
 		ExpiredAllowed: false, // default
+		ErrorCallback:  nil,   // default
 	}
 
 	for _, opt := range opts {
@@ -196,5 +212,12 @@ func WithJWTOptions(jwtOpts ...jwt.Option) AuthMiddlewareOption {
 				break
 			}
 		}
+	}
+}
+
+// WithErrorCallback sets a custom error callback function
+func WithErrorCallback(callback AuthErrorCallback) AuthMiddlewareOption {
+	return func(opts *AuthMiddlewareOptions) {
+		opts.ErrorCallback = callback
 	}
 }
