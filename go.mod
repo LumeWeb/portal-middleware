@@ -9,6 +9,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/labstack/echo/v4 v4.13.4
 	github.com/rs/cors v1.11.1
+	github.com/samber/lo v1.51.0
 	github.com/stretchr/testify v1.10.0
 	go.lumeweb.com/gswagger v0.20.8
 	go.lumeweb.com/portal v0.4.2-0.20250622033937-d2bdfd254870
@@ -93,7 +94,6 @@ require (
 	github.com/pquerna/otp v1.4.0 // indirect
 	github.com/redis/go-redis/v9 v9.7.1 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
-	github.com/samber/lo v1.51.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/cast v1.9.2 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect

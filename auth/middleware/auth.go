@@ -6,6 +6,7 @@ import (
 	"errors"
 	"reflect"
 	"strconv"
+	"github.com/samber/lo"
 
 	gjwt "github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
@@ -28,7 +29,7 @@ type AuthMiddlewareOption = func(*AuthMiddlewareOptions)
 type AuthMiddlewareOptions struct {
 	Config         adapter.ConfigProvider
 	Validator      validation.TokenValidator
-	Purpose        jwt.Purpose
+	Purposes       []jwt.Purpose
 	EmptyAllowed   bool
 	ExpiredAllowed bool
 	Options        []jwt.Option
@@ -52,8 +53,8 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 	if options.Config == nil {
 		panic("AuthMiddleware requires a ConfigProvider")
 	}
-	if options.Purpose == "" {
-		panic("AuthMiddleware requires a Purpose")
+	if len(options.Purposes) == 0 {
+		panic("AuthMiddleware requires at least one Purpose")
 	}
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -78,14 +79,32 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 				claimsType = &gjwt.RegisteredClaims{}
 			}
 
-			baseClaims, customClaims, err := validator.ValidateWithClaims(authToken, options.Purpose, claimsType)
-			if err != nil {
-				// Handle expired tokens when allowed
-				if options.ExpiredAllowed && errors.Is(err, gjwt.ErrTokenExpired) {
-					// We still need baseClaims to proceed
-					if baseClaims == nil {
-						return options.handleError(c)
+			var baseClaims *gjwt.RegisteredClaims
+			var customClaims gjwt.Claims
+			var err error
+			// Track earliest expired match so we can honor ExpiredAllowed
+			var expiredBase *gjwt.RegisteredClaims
+			var expiredCustom gjwt.Claims
+			var sawExpired bool
+
+			for _, purpose := range options.Purposes {
+				bc, cc, e := validator.ValidateWithClaims(authToken, purpose, claimsType)
+				if e == nil {
+					baseClaims, customClaims, err = bc, cc, nil
+					break
+				}
+				// Remember an expired match
+				if options.ExpiredAllowed && errors.Is(e, gjwt.ErrTokenExpired) {
+					if bc != nil {
+						expiredBase, expiredCustom = bc, cc
+						sawExpired = true
 					}
+				}
+				err = e
+			}
+			if err != nil {
+				if sawExpired && expiredBase != nil {
+					baseClaims, customClaims = expiredBase, expiredCustom
 				} else {
 					return options.handleError(c)
 				}
@@ -151,10 +170,15 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 }
 
 // NewAuthOptions creates and configures AuthMiddlewareOptions in one step
-func NewAuthOptions(config adapter.ConfigProvider, purpose jwt.Purpose, opts ...AuthMiddlewareOption) *AuthMiddlewareOptions {
+func NewAuthOptions(config adapter.ConfigProvider, purposes []jwt.Purpose, opts ...AuthMiddlewareOption) *AuthMiddlewareOptions {
+	// Defensively copy and sanitize purposes (drop empty, de-duplicate)
+	clean := lo.Uniq(lo.Filter(purposes, func(p jwt.Purpose, _ int) bool {
+		return p != ""
+	}))
+
 	options := &AuthMiddlewareOptions{
 		Config:         config,
-		Purpose:        purpose,
+		Purposes:       clean,
 		EmptyAllowed:   false, // default
 		ExpiredAllowed: false, // default
 		ErrorCallback:  nil,   // default
@@ -173,10 +197,12 @@ func WithConfig(config adapter.ConfigProvider) AuthMiddlewareOption {
 	}
 }
 
-// WithPurpose sets the JWT purpose for the options
-func WithPurpose(purpose jwt.Purpose) AuthMiddlewareOption {
+// WithPurpose sets the JWT purposes for the options
+func WithPurpose(purposes ...jwt.Purpose) AuthMiddlewareOption {
 	return func(opts *AuthMiddlewareOptions) {
-		opts.Purpose = purpose
+		opts.Purposes = lo.Uniq(lo.Filter(purposes, func(p jwt.Purpose, _ int) bool {
+			return p != ""
+		}))
 	}
 }
 

@@ -10,12 +10,12 @@ import (
 )
 
 // AuthMiddleware creates authentication middleware using core configuration
-func AuthMiddleware(ctx core.Context, purpose jwt.Purpose, options ...AuthOption) echo.MiddlewareFunc {
+func AuthMiddleware(ctx core.Context, purposes []jwt.Purpose, options ...AuthOption) echo.MiddlewareFunc {
 	config := adapter.NewFromCore(ctx)
 
 	opts := middleware.NewAuthOptions(
 		config,
-		purpose,
+		purposes,
 	)
 
 	for _, option := range options {
@@ -46,6 +46,16 @@ func WithAuthValidator(validator validation.TokenValidator) AuthOption {
 // WithAuthJWTOptions applies custom JWT options to the authentication middleware configuration.
 func WithAuthJWTOptions(jwtOpts ...jwt.Option) AuthOption {
 	return middleware.WithJWTOptions(jwtOpts...)
+}
+
+// WithAuthPurpose forwards to middleware.WithPurpose for configuring allowed JWT purposes
+func WithAuthPurpose(purposes ...jwt.Purpose) AuthOption {
+	return middleware.WithPurpose(purposes...)
+}
+
+// AuthMiddlewareSinglePurpose is a convenience wrapper for AuthMiddleware that accepts a single purpose
+func AuthMiddlewareSinglePurpose(ctx core.Context, purpose jwt.Purpose, options ...AuthOption) echo.MiddlewareFunc {
+	return AuthMiddleware(ctx, []jwt.Purpose{purpose}, options...)
 }
 
 // AuthErrorCallback defines a function type that takes a context and returns an error code and JSON serializable response

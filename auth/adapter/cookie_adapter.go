@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/samber/lo"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
 
 	"go.lumeweb.com/portal/core"
@@ -37,12 +38,9 @@ func (p *coreAPIProvider) GetAPIs() []string {
 // NewAPIProvider creates a new APIProvider using core.GetAPIs
 func NewAPIProvider() APIProvider {
 	apiList := core.GetAPIList()
-	domains := make([]string, 0, len(apiList))
-
-	for _, api := range apiList {
-		domains = append(domains, api.Subdomain())
-	}
-
+	domains := lo.Map(apiList, func(api core.API, _ int) string {
+		return api.Subdomain()
+	})
 	return &coreAPIProvider{apis: domains}
 }
 

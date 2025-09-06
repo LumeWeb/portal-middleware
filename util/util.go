@@ -40,11 +40,11 @@ func (m *Middleware) Then() http.Handler {
 // WithAuth adds authentication middleware to the chain.
 // Configures JWT validation with the specified purpose and configuration.
 func (m *Middleware) WithAuth(config adapter.ConfigProvider, purpose jwt.Purpose) *Middleware {
-	return m.Chain(convert.Unwrap(middleware.AuthMiddleware(middleware.AuthMiddlewareOptions{
-		Config:         config,
-		Purpose:        purpose,
-		ExpiredAllowed: false,
-	})))
+	opts := middleware.NewAuthOptions(
+		config,
+		[]jwt.Purpose{purpose},
+	)
+	return m.Chain(convert.Unwrap(middleware.AuthMiddleware(*opts)))
 }
 
 // WithAuthFromCore adds authentication middleware using core.Context
