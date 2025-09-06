@@ -26,13 +26,13 @@ func WithVerification(ctx core.Context) router.RouteOption {
 
 func With2FA(ctx core.Context) router.RouteOption {
 	return func(d *router.RouteDefinition) {
-		d.Middlewares = append(d.Middlewares, middleware.AuthMiddleware(ctx, jwt.Purpose2FA))
+		d.Middlewares = append(d.Middlewares, middleware.AuthMiddlewareSinglePurpose(ctx, jwt.Purpose2FA))
 	}
 }
 
 func WithAuth(ctx core.Context) router.RouteOption {
 	return func(d *router.RouteDefinition) {
-		d.Middlewares = append(d.Middlewares, middleware.AuthMiddleware(ctx, jwt.PurposeLogin))
+		d.Middlewares = append(d.Middlewares, middleware.AuthMiddlewareSinglePurpose(ctx, jwt.PurposeLogin))
 	}
 }
 
