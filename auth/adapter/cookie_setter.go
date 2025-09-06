@@ -2,9 +2,10 @@ package adapter
 
 import (
 	"errors"
-	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"net/http"
 	"time"
+
+	"go.lumeweb.com/portal-middleware/auth/jwt"
 )
 
 var (
@@ -66,6 +67,10 @@ type CookieSetter interface {
 	// - httpOnly: Whether the cookie should be inaccessible to JavaScript
 	// - sameSite: The SameSite attribute for the cookie
 	SetCookie(w http.ResponseWriter, name, value, domain, path string, expiry time.Time, secure, httpOnly bool, sameSite http.SameSite)
+
+	// Config returns the configuration provider used by this cookie setter.
+	// This allows access to configuration values such as domain, secure settings, etc.
+	Config() ConfigProvider
 }
 
 // SetJWTCookie sets a JWT token as a cookie
@@ -85,7 +90,7 @@ func (s *coreCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string,
 	}
 
 	// Use SetCookie internally
-	s.SetCookie(w, s.config.GetAuthCookieName(), tokenString, s.config.GetDomain(), "/", time.Now().Add(expiry), true, true, http.SameSiteStrictMode)
+	s.SetCookie(w, s.config.GetAuthCookieName(), tokenString, s.config.GetDomain(), "/", time.Now().Add(expiry), s.config.Secure(), true, http.SameSiteStrictMode)
 
 	return tokenString, nil
 }
@@ -97,7 +102,7 @@ func (s *coreCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 		Value:    "",
 		Path:     "/",
 		MaxAge:   -1,
-		Secure:   true,
+		Secure:   s.config.Secure(),
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	}
@@ -132,7 +137,7 @@ func (s *coreCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request
 		Name:     cookieName,
 		Value:    cookie.Value,
 		MaxAge:   int(time.Until(exp.Time).Seconds()),
-		Secure:   true,
+		Secure:   s.config.Secure(),
 		HttpOnly: true,
 		Path:     "/",
 		Domain:   domain,
@@ -154,6 +159,11 @@ func (s *coreCookieSetter) SetCookie(w http.ResponseWriter, name, value, domain,
 	http.SetCookie(w, cookie)
 }
 
+// Config returns the configuration provider
+func (s *coreCookieSetter) Config() ConfigProvider {
+	return s.config
+}
+
 // NewCookieSetter creates a new defaultCookieSetter
 func NewCookieSetter(config ConfigProvider) CookieSetter {
 	return &coreCookieSetter{
@@ -163,7 +173,7 @@ func NewCookieSetter(config ConfigProvider) CookieSetter {
 
 // multiCookieSetter handles setting cookies across multiple APIs
 type multiCookieSetter struct {
-	Config ConfigProvider
+	config ConfigProvider
 	APIs   APIProvider
 }
 
@@ -181,8 +191,8 @@ func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
 
 	// Create token for main domain
 	mainToken, err := jwt.CreateToken(
-		m.Config.GetPrivateKey(),
-		m.Config.GetDomain(),
+		m.config.GetPrivateKey(),
+		m.config.GetDomain(),
 		subject,
 		purpose,
 		expiry,
@@ -192,15 +202,16 @@ func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
 		errs = append(errs, err)
 	} else {
 		// Set cookie for main domain
-		m.setCookieForDomain(w, m.Config.GetAuthCookieName(), mainToken, m.Config.GetDomain(), "/", time.Now().Add(expiry), true, true, http.SameSiteStrictMode)
+		m.setCookieForDomain(w, m.config.GetAuthCookieName(), mainToken, m.config.GetDomain(), "/", time.Now().Add(expiry), m.config.Secure(), true, http.SameSiteStrictMode)
 	}
 
 	// Set cookies for all APIs
 	for _, api := range m.APIs.GetAPIs() {
-		// Create token for each API
+		// Create token for each API - use combined domain
+		fullDomain := api + "." + m.config.GetDomain()
 		token, err := jwt.CreateToken(
-			m.Config.GetPrivateKey(),
-			api,
+			m.config.GetPrivateKey(),
+			fullDomain,
 			subject,
 			purpose,
 			expiry,
@@ -213,7 +224,7 @@ func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
 		}
 
 		// Set cookie for this API domain only
-		m.setCookieForDomain(w, m.Config.GetAuthCookieName(), token, api, "/", time.Now().Add(expiry), true, true, http.SameSiteStrictMode)
+		m.setCookieForDomain(w, m.config.GetAuthCookieName(), token, fullDomain, "/", time.Now().Add(expiry), m.config.Secure(), true, http.SameSiteStrictMode)
 	}
 
 	// Return the main token if we have it, otherwise return error
@@ -227,7 +238,7 @@ func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
 	if len(errs) > 0 {
 		return "", errors.Join(errs...)
 	}
-	
+
 	// This shouldn't happen, but just in case
 	return "", errors.New("no tokens were created successfully")
 }
@@ -235,18 +246,20 @@ func (m *multiCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, 
 // ClearJWTCookie clears JWT cookies for all APIs
 func (m *multiCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 	// Clear cookie for main domain
-	m.setCookieForDomain(w, m.Config.GetAuthCookieName(), "", m.Config.GetDomain(), "/", time.Time{}, true, true, http.SameSiteStrictMode)
+	m.setCookieForDomain(w, m.config.GetAuthCookieName(), "", m.config.GetDomain(), "/", time.Time{}, m.config.Secure(), true, http.SameSiteStrictMode)
 
 	// Clear cookies for all APIs
 	for _, api := range m.APIs.GetAPIs() {
+		// Construct full domain by combining API subdomain with root domain
+		apiDomain := api + "." + m.config.GetDomain()
 		// Clear cookie for this API domain only
-		m.setCookieForDomain(w, m.Config.GetAuthCookieName(), "", api, "/", time.Time{}, true, true, http.SameSiteStrictMode)
+		m.setCookieForDomain(w, m.config.GetAuthCookieName(), "", apiDomain, "/", time.Time{}, m.config.Secure(), true, http.SameSiteStrictMode)
 	}
 }
 
 // EchoAuthCookie implements CookieSetter interface for multiCookieSetter
 func (m *multiCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, opts ...jwt.Option) {
-	cookieName := m.Config.GetAuthCookieName()
+	cookieName := m.config.GetAuthCookieName()
 	mainCookie, err := r.Cookie(cookieName)
 	if err != nil {
 		return // No main cookie to echo
@@ -283,9 +296,9 @@ func (m *multiCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Reques
 	var errs []error
 
 	// Echo main domain cookie with correct issuer
-	mainDomain := m.Config.GetCtx().Config().Config().Core.Domain
+	mainDomain := m.config.GetDomain()
 	mainToken, err := jwt.CreateToken(
-		m.Config.GetPrivateKey(),
+		m.config.GetPrivateKey(),
 		mainDomain,
 		subject,
 		purpose,
@@ -296,14 +309,15 @@ func (m *multiCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Reques
 		errs = append(errs, err)
 	} else {
 		// Set cookie for main domain only
-		m.setCookieForDomain(w, cookieName, mainToken, mainDomain, "/", time.Now().Add(time.Until(exp.Time)), true, true, http.SameSiteStrictMode)
+		m.setCookieForDomain(w, cookieName, mainToken, mainDomain, "/", time.Now().Add(time.Until(exp.Time)), m.config.Secure(), true, http.SameSiteStrictMode)
 	}
 
 	// Echo API subdomain cookies with correct issuer
 	for _, api := range m.APIs.GetAPIs() {
+		fullDomain := api + "." + m.config.GetDomain()
 		apiToken, err := jwt.CreateToken(
-			m.Config.GetPrivateKey(),
-			api, // ✅ Use the API domain as the issuer
+			m.config.GetPrivateKey(),
+			fullDomain, // Use the combined API domain as the issuer
 			subject,
 			purpose,
 			time.Until(exp.Time),
@@ -315,7 +329,7 @@ func (m *multiCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Reques
 		}
 
 		// Set cookie for this API domain only
-		m.setCookieForDomain(w, cookieName, apiToken, api, "/", time.Now().Add(time.Until(exp.Time)), true, true, http.SameSiteStrictMode)
+		m.setCookieForDomain(w, cookieName, apiToken, fullDomain, "/", time.Now().Add(time.Until(exp.Time)), m.config.Secure(), true, http.SameSiteStrictMode)
 	}
 
 	if len(errs) > 0 {
@@ -336,12 +350,12 @@ func (m *multiCookieSetter) setCookieForDomain(w http.ResponseWriter, name, valu
 		HttpOnly: httpOnly,
 		SameSite: sameSite,
 	}
-	
+
 	// Handle clearing cookies (empty value and zero expiry)
 	if value == "" && expiry.IsZero() {
 		cookie.MaxAge = -1
 	}
-	
+
 	http.SetCookie(w, cookie)
 }
 
@@ -351,17 +365,22 @@ func (m *multiCookieSetter) setCookieForDomain(w http.ResponseWriter, name, valu
 func (m *multiCookieSetter) SetCookie(w http.ResponseWriter, name, value, domain, path string, expiry time.Time, secure, httpOnly bool, sameSite http.SameSite) {
 	// Use the provided domain, fallback to main domain if empty
 	if domain == "" {
-		domain = m.Config.GetDomain()
+		domain = m.config.GetDomain()
 	}
-	
+
 	// Set exactly one cookie with the specified domain
 	m.setCookieForDomain(w, name, value, domain, path, expiry, secure, httpOnly, sameSite)
+}
+
+// Config returns the configuration provider
+func (m *multiCookieSetter) Config() ConfigProvider {
+	return m.config
 }
 
 // NewMultiCookieSetter creates a new multiCookieSetter
 func NewMultiCookieSetter(config ConfigProvider, apis APIProvider) CookieSetter {
 	return &multiCookieSetter{
-		Config: config,
+		config: config,
 		APIs:   apis,
 	}
 }

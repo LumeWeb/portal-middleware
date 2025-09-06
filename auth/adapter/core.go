@@ -14,6 +14,7 @@ type ConfigProvider interface {
 	GetAuthCookieName() string
 	GetAuthTokenName() string
 	GetCtx() core.Context
+	Secure() bool
 }
 
 // coreConfigProvider bridges the core framework's context with the auth package's ConfigProvider interface.
@@ -59,4 +60,13 @@ func (c *coreConfigProvider) GetAuthTokenName() string {
 
 func (c *coreConfigProvider) GetCtx() core.Context {
 	return c.ctx
+}
+
+// Secure returns whether the auth cookie should be marked as secure
+func (c *coreConfigProvider) Secure() bool {
+	cfg := c.ctx.Config()
+	if cfg == nil || cfg.Config() == nil {
+		return true
+	}
+	return cfg.Config().Core.Secure
 }

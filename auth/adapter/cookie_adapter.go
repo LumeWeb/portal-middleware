@@ -1,9 +1,10 @@
 package adapter
 
 import (
-	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"net/http"
 	"time"
+
+	"go.lumeweb.com/portal-middleware/auth/jwt"
 
 	"go.lumeweb.com/portal/core"
 )
@@ -75,7 +76,7 @@ func newDomainCookieSetter(base CookieSetter, domain string) *domainCookieSetter
 func (d *domainCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string, purpose jwt.Purpose,
 	expiry time.Duration, opts ...jwt.Option) (string, error) {
 	// Get config from base but override domain
-	config := d.base.(*coreCookieSetter).config
+	config := d.base.Config()
 
 	tokenString, err := jwt.CreateToken(
 		config.GetPrivateKey(),
@@ -90,13 +91,13 @@ func (d *domainCookieSetter) SetJWTCookie(w http.ResponseWriter, subject string,
 	}
 
 	// Use SetCookie internally
-	d.SetCookie(w, config.GetAuthCookieName(), tokenString, d.domain, "/", time.Now().Add(expiry), true, true, http.SameSiteStrictMode)
+	d.SetCookie(w, config.GetAuthCookieName(), tokenString, d.domain, "/", time.Now().Add(expiry), config.Secure(), true, http.SameSiteStrictMode)
 
 	return tokenString, nil
 }
 
 func (d *domainCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
-	config := d.base.(*coreCookieSetter).config
+	config := d.base.Config()
 
 	// Clear domain-specific cookie
 	cookie := &http.Cookie{
@@ -105,7 +106,7 @@ func (d *domainCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 		Domain:   d.domain,
 		Path:     "/",
 		MaxAge:   -1,
-		Secure:   true,
+		Secure:   config.Secure(),
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	}
@@ -113,7 +114,7 @@ func (d *domainCookieSetter) ClearJWTCookie(w http.ResponseWriter) {
 }
 
 func (d *domainCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, opts ...jwt.Option) {
-	cookieName := d.base.(*coreCookieSetter).config.GetAuthCookieName()
+	cookieName := d.base.Config().GetAuthCookieName()
 
 	// Get the main cookie from the request
 	mainCookie, err := r.Cookie(cookieName)
@@ -141,12 +142,17 @@ func (d *domainCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Reque
 		Value:    mainCookie.Value,
 		Expires:  exp.Time,
 		MaxAge:   int(time.Until(exp.Time).Seconds()),
-		Secure:   true,
+		Secure:   d.base.Config().Secure(),
 		HttpOnly: true,
 		Path:     "/",
 		Domain:   d.domain,
 		SameSite: http.SameSiteStrictMode,
 	})
+}
+
+// Config returns the configuration provider from the base cookie setter
+func (d *domainCookieSetter) Config() ConfigProvider {
+	return d.base.Config()
 }
 
 // SetCookie implements CookieSetter interface for setting a generic cookie for a specific domain.
@@ -203,4 +209,13 @@ func (c *chainedCookieSetter) SetCookie(w http.ResponseWriter, name, value, doma
 	for _, setter := range c.setters {
 		setter.SetCookie(w, name, value, domain, path, expiry, secure, httpOnly, sameSite)
 	}
+}
+
+// Config returns the configuration provider from the first setter in the chain
+// If no setters exist, returns nil
+func (c *chainedCookieSetter) Config() ConfigProvider {
+	if len(c.setters) > 0 {
+		return c.setters[0].Config()
+	}
+	return nil
 }
