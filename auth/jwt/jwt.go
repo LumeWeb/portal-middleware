@@ -42,6 +42,7 @@ const (
 	PurposeNone  Purpose = ""      // No specific purpose required
 	PurposeLogin Purpose = "login" // Authentication tokens
 	Purpose2FA   Purpose = "2fa"   // Two-factor authentication tokens
+	PurposeAPI   Purpose = "api"   // API authentication tokens
 )
 
 // ClaimModifier defines a function type for modifying JWT claims
