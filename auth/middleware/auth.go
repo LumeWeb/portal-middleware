@@ -170,15 +170,10 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 }
 
 // NewAuthOptions creates and configures AuthMiddlewareOptions in one step
-func NewAuthOptions(config adapter.ConfigProvider, purposes []jwt.Purpose, opts ...AuthMiddlewareOption) *AuthMiddlewareOptions {
-	// Defensively copy and sanitize purposes (drop empty, de-duplicate)
-	clean := lo.Uniq(lo.Filter(purposes, func(p jwt.Purpose, _ int) bool {
-		return p != ""
-	}))
-
+func NewAuthOptions(config adapter.ConfigProvider, opts ...AuthMiddlewareOption) *AuthMiddlewareOptions {
 	options := &AuthMiddlewareOptions{
 		Config:         config,
-		Purposes:       clean,
+		Purposes:       nil,   // must be set via WithPurpose
 		EmptyAllowed:   false, // default
 		ExpiredAllowed: false, // default
 		ErrorCallback:  nil,   // default
@@ -200,9 +195,13 @@ func WithConfig(config adapter.ConfigProvider) AuthMiddlewareOption {
 // WithPurpose sets the JWT purposes for the options
 func WithPurpose(purposes ...jwt.Purpose) AuthMiddlewareOption {
 	return func(opts *AuthMiddlewareOptions) {
-		opts.Purposes = lo.Uniq(lo.Filter(purposes, func(p jwt.Purpose, _ int) bool {
+		clean := lo.Uniq(lo.Filter(purposes, func(p jwt.Purpose, _ int) bool {
 			return p != ""
 		}))
+		if len(clean) == 0 {
+			panic("WithPurpose requires at least one non-empty purpose")
+		}
+		opts.Purposes = clean
 	}
 }
 
