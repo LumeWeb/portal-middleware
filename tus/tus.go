@@ -252,7 +252,42 @@ func RegisterTusRoutes(
 	routes = append(routes, deleteRoute)
 
 	// OPTIONS route (with ID) - for CORS preflight on specific uploads
-	optionsRoute := buildRouteOptions(http.MethodOptions, basePath+idPathSuffix, router.TusOptionsSwagger)
+	optionsRoute := buildRouteOptions(http.MethodOptions, basePath+idPathSuffix, func(summary, description string, errors map[int]any) swagger.Definitions {
+		defs := router.TusOptionsSwagger(summary, description, errors)
+		// Ensure the path parameter is properly defined
+		if defs.Paths != nil {
+			for path, pathItem := range defs.Paths {
+				if strings.Contains(path, "{id}") {
+					for method, operation := range pathItem {
+						if method == "options" {
+							if operation.Parameters == nil {
+								operation.Parameters = []swagger.Parameter{}
+							}
+							// Check if 'id' parameter is already defined
+							hasIDParam := false
+							for _, param := range operation.Parameters {
+								if param.Name == "id" && param.In == "path" {
+									hasIDParam = true
+									break
+								}
+							}
+							// Add 'id' path parameter if missing
+							if !hasIDParam {
+								operation.Parameters = append(operation.Parameters, swagger.Parameter{
+									Name:        "id",
+									In:          "path",
+									Description: "Upload ID",
+									Required:    true,
+									Schema:      swagger.Schema{Type: "string"},
+								})
+							}
+						}
+					}
+				}
+			}
+		}
+		return defs
+	})
 	routes = append(routes, optionsRoute)
 
 	// Add base path OPTIONS route (no ID) - for CORS preflight on base path
