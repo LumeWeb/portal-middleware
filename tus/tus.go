@@ -230,46 +230,56 @@ func RegisterTusRoutes(
 		return router.NewRoute(method, path, tusHandler, opts...)
 	}
 
-	// Define route configurations
+	// Helper to build route options with ID path parameter
+	buildIDRouteOptions := func(method string, path string, swaggerFn func(string, string, map[int]any) swagger.Definitions) router.RouteDefinition {
+		return buildRouteOptions(method, path, func(summary, description string, errResp map[int]any) swagger.Definitions {
+			def := swaggerFn(summary, description, errResp)
+			// Add ID path parameter for this route
+			return router.SwaggerPathParam(def, "id", "The ID of the upload resource.", "string")
+		})
+	}
+
 	idPathSuffix := "/:id"
-	
-	routeConfigs := []struct {
-		method       string
-		swaggerFunc  func(string, string, map[int]any) swagger.Definitions
-		hasIDPath    bool
-	}{
-		{http.MethodPost, router.TusPostSwagger, false},
-		{http.MethodHead, router.TusHeadSwagger, true},
-		{http.MethodPatch, router.TusPatchSwagger, true},
-		{http.MethodDelete, router.TusDeleteSwagger, true},
-	}
 
-	// Build main routes
+	// Build main routes explicitly
 	var routes []router.RouteDefinition
-	for _, cfg := range routeConfigs {
-		path := basePath
-		if cfg.hasIDPath {
-			path += idPathSuffix
-		}
-		routes = append(routes, buildRouteOptions(cfg.method, path, cfg.swaggerFunc))
+
+	// Define TUS routes in a more DRY way
+	tusRoutes := []struct {
+		method   string
+		path     string
+		swaggerFn func(string, string, map[int]any) swagger.Definitions
+	}{
+		{http.MethodPost, basePath, router.TusPostSwagger},
+		{http.MethodHead, basePath + idPathSuffix, router.TusHeadSwagger},
+		{http.MethodPatch, basePath + idPathSuffix, router.TusPatchSwagger},
+		{http.MethodDelete, basePath + idPathSuffix, router.TusDeleteSwagger},
 	}
 
-	// Add OPTIONS routes for both base path and ID path
-	for _, path := range []string{basePath, basePath + "/:id"} {
-		routes = append(routes, router.NewRoute(
-			http.MethodOptions,
-			path,
-			dummyOptionsHandler,
-			router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
-				*d = router.TusOptionsSwagger(
-					"Get TUS Server Capabilities",
-					"Retrieves information about the TUS server's supported versions, extensions, and limits.",
-					commonErrResp,
-				)
-			}),
-			router.WithMiddlewares(mw...),
-		))
+	// Add standard TUS routes
+	for _, route := range tusRoutes {
+		routes = append(routes, buildRouteOptions(route.method, route.path, route.swaggerFn))
 	}
+
+	// Add OPTIONS route (with ID) - for CORS preflight on specific uploads
+	optionsRoute := buildIDRouteOptions(http.MethodOptions, basePath+idPathSuffix, router.TusOptionsSwagger)
+	routes = append(routes, optionsRoute)
+
+	// Add base path OPTIONS route (no ID) - for CORS preflight on base path
+	optionsBaseRoute := router.NewRoute(
+		http.MethodOptions,
+		basePath,
+		dummyOptionsHandler,
+		router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
+			*d = router.TusOptionsSwagger(
+				"Get TUS Server Capabilities",
+				"Retrieves information about the TUS server's supported versions, extensions, and limits.",
+				commonErrResp,
+			)
+		}),
+		router.WithMiddlewares(mw...),
+	)
+	routes = append(routes, optionsBaseRoute)
 
 	routes = router.DefineRoutes(routes...)
 
