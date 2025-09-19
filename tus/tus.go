@@ -242,6 +242,7 @@ func RegisterTusRoutes(
 		{http.MethodHead, router.TusHeadSwagger, true},
 		{http.MethodPatch, router.TusPatchSwagger, true},
 		{http.MethodDelete, router.TusDeleteSwagger, true},
+		{http.MethodOptions, router.TusOptionsSwagger, true}, // OPTIONS route also needs ID path
 	}
 
 	// Build main routes
@@ -251,25 +252,26 @@ func RegisterTusRoutes(
 		if cfg.hasIDPath {
 			path += idPathSuffix
 		}
-		routes = append(routes, buildRouteOptions(cfg.method, path, cfg.swaggerFunc))
+		
+		route := buildRouteOptions(cfg.method, path, cfg.swaggerFunc)
+		routes = append(routes, route)
 	}
 
-	// Add OPTIONS routes for both base path and ID path
-	for _, path := range []string{basePath, basePath + "/:id"} {
-		routes = append(routes, router.NewRoute(
-			http.MethodOptions,
-			path,
-			dummyOptionsHandler,
-			router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
-				*d = router.TusOptionsSwagger(
-					"Get TUS Server Capabilities",
-					"Retrieves information about the TUS server's supported versions, extensions, and limits.",
-					commonErrResp,
-				)
-			}),
-			router.WithMiddlewares(mw...),
-		))
-	}
+	// Add base path OPTIONS route (no ID)
+	optionsBaseRoute := router.NewRoute(
+		http.MethodOptions,
+		basePath,
+		dummyOptionsHandler,
+		router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
+			*d = router.TusOptionsSwagger(
+				"Get TUS Server Capabilities",
+				"Retrieves information about the TUS server's supported versions, extensions, and limits.",
+				commonErrResp,
+			)
+		}),
+		router.WithMiddlewares(mw...),
+	)
+	routes = append(routes, optionsBaseRoute)
 
 	routes = router.DefineRoutes(routes...)
 
