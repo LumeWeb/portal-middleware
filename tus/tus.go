@@ -1,6 +1,10 @@
 package tus
 
 import (
+	"net/http"
+	"net/url"
+	"strings"
+
 	"github.com/labstack/echo/v4"
 	swagger "go.lumeweb.com/gswagger"
 	mcontext "go.lumeweb.com/portal-middleware/context"
@@ -8,9 +12,6 @@ import (
 	"go.lumeweb.com/portal-middleware/util/convert"
 	"go.lumeweb.com/portal-router"
 	"go.lumeweb.com/portal/core"
-	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/rs/cors"
 )
@@ -229,15 +230,35 @@ func RegisterTusRoutes(
 		return router.NewRoute(method, path, tusHandler, opts...)
 	}
 
-	// Define routes with their specific swagger docs and middleware
-	routes := router.DefineRoutes(
-		buildRouteOptions(http.MethodPost, basePath, router.TusPostSwagger),
-		buildRouteOptions(http.MethodHead, basePath+"/:id", router.TusHeadSwagger),
-		buildRouteOptions(http.MethodPatch, basePath+"/:id", router.TusPatchSwagger),
-		buildRouteOptions(http.MethodDelete, basePath+"/:id", router.TusDeleteSwagger),
-		router.NewRoute(
+	// Define route configurations
+	idPathSuffix := "/:id"
+	
+	routeConfigs := []struct {
+		method       string
+		swaggerFunc  func(string, string, map[int]any) swagger.Definitions
+		hasIDPath    bool
+	}{
+		{http.MethodPost, router.TusPostSwagger, false},
+		{http.MethodHead, router.TusHeadSwagger, true},
+		{http.MethodPatch, router.TusPatchSwagger, true},
+		{http.MethodDelete, router.TusDeleteSwagger, true},
+	}
+
+	// Build main routes
+	var routes []router.RouteDefinition
+	for _, cfg := range routeConfigs {
+		path := basePath
+		if cfg.hasIDPath {
+			path += idPathSuffix
+		}
+		routes = append(routes, buildRouteOptions(cfg.method, path, cfg.swaggerFunc))
+	}
+
+	// Add OPTIONS routes for both base path and ID path
+	for _, path := range []string{basePath, basePath + "/:id"} {
+		routes = append(routes, router.NewRoute(
 			http.MethodOptions,
-			basePath,
+			path,
 			dummyOptionsHandler,
 			router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
 				*d = router.TusOptionsSwagger(
@@ -247,8 +268,10 @@ func RegisterTusRoutes(
 				)
 			}),
 			router.WithMiddlewares(mw...),
-		),
-	)
+		))
+	}
+
+	routes = router.DefineRoutes(routes...)
 
 	return router.RegisterRoutes(
 		grouter,
