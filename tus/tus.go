@@ -242,7 +242,9 @@ func RegisterTusRoutes(
 		{http.MethodHead, router.TusHeadSwagger, true},
 		{http.MethodPatch, router.TusPatchSwagger, true},
 		{http.MethodDelete, router.TusDeleteSwagger, true},
-		{http.MethodOptions, router.TusOptionsSwagger, true}, // OPTIONS route also needs ID path
+		{http.MethodOptions, func(summary, description string, errors map[int]any) swagger.Definitions {
+			return router.TusOptionsSwagger(summary, description, errors)
+		}, true}, // OPTIONS route also needs ID path
 	}
 
 	// Build main routes
