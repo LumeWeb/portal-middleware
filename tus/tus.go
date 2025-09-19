@@ -230,36 +230,32 @@ func RegisterTusRoutes(
 		return router.NewRoute(method, path, tusHandler, opts...)
 	}
 
-	// Define route configurations
 	idPathSuffix := "/:id"
 	
-	routeConfigs := []struct {
-		method       string
-		swaggerFunc  func(string, string, map[int]any) swagger.Definitions
-		hasIDPath    bool
-	}{
-		{http.MethodPost, router.TusPostSwagger, false},
-		{http.MethodHead, router.TusHeadSwagger, true},
-		{http.MethodPatch, router.TusPatchSwagger, true},
-		{http.MethodDelete, router.TusDeleteSwagger, true},
-		{http.MethodOptions, func(summary, description string, errors map[int]any) swagger.Definitions {
-			return router.TusOptionsSwagger(summary, description, errors)
-		}, true}, // OPTIONS route also needs ID path
-	}
-
-	// Build main routes
+	// Build main routes explicitly
 	var routes []router.RouteDefinition
-	for _, cfg := range routeConfigs {
-		path := basePath
-		if cfg.hasIDPath {
-			path += idPathSuffix
-		}
-		
-		route := buildRouteOptions(cfg.method, path, cfg.swaggerFunc)
-		routes = append(routes, route)
-	}
+	
+	// POST route (no ID)
+	postRoute := buildRouteOptions(http.MethodPost, basePath, router.TusPostSwagger)
+	routes = append(routes, postRoute)
 
-	// Add base path OPTIONS route (no ID)
+	// HEAD route (with ID)
+	headRoute := buildRouteOptions(http.MethodHead, basePath+idPathSuffix, router.TusHeadSwagger)
+	routes = append(routes, headRoute)
+
+	// PATCH route (with ID)
+	patchRoute := buildRouteOptions(http.MethodPatch, basePath+idPathSuffix, router.TusPatchSwagger)
+	routes = append(routes, patchRoute)
+
+	// DELETE route (with ID)
+	deleteRoute := buildRouteOptions(http.MethodDelete, basePath+idPathSuffix, router.TusDeleteSwagger)
+	routes = append(routes, deleteRoute)
+
+	// OPTIONS route (with ID) - for CORS preflight on specific uploads
+	optionsRoute := buildRouteOptions(http.MethodOptions, basePath+idPathSuffix, router.TusOptionsSwagger)
+	routes = append(routes, optionsRoute)
+
+	// Add base path OPTIONS route (no ID) - for CORS preflight on base path
 	optionsBaseRoute := router.NewRoute(
 		http.MethodOptions,
 		basePath,
