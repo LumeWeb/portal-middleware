@@ -11,9 +11,9 @@ require (
 	github.com/rs/cors v1.11.1
 	github.com/samber/lo v1.51.0
 	github.com/stretchr/testify v1.10.0
-	go.lumeweb.com/gswagger v0.20.8
+	go.lumeweb.com/gswagger v0.20.9
 	go.lumeweb.com/portal v0.4.2-0.20250622033937-d2bdfd254870
-	go.lumeweb.com/portal-router v0.6.1
+	go.lumeweb.com/portal-router v0.6.7
 	go.sia.tech/coreutils v0.12.1
 	gorm.io/gorm v1.25.12
 )
