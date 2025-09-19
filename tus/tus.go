@@ -252,7 +252,12 @@ func RegisterTusRoutes(
 	routes = append(routes, deleteRoute)
 
 	// OPTIONS route (with ID) - for CORS preflight on specific uploads
-	optionsRoute := buildRouteOptions(http.MethodOptions, basePath+idPathSuffix, router.TusOptionsSwagger)
+	optionsRoute := buildRouteOptions(http.MethodOptions, basePath+idPathSuffix, func(summary, description string, errResp map[int]any) swagger.Definitions {
+		def := router.TusOptionsSwagger(summary, description, nil, errResp)
+		// Add ID path parameter for this route
+		def = router.SwaggerPathParam(def, "id", "The ID of the upload resource.", "string")
+		return def
+	})
 	routes = append(routes, optionsRoute)
 
 	// Add base path OPTIONS route (no ID) - for CORS preflight on base path
@@ -264,6 +269,7 @@ func RegisterTusRoutes(
 			*d = router.TusOptionsSwagger(
 				"Get TUS Server Capabilities",
 				"Retrieves information about the TUS server's supported versions, extensions, and limits.",
+				nil,
 				commonErrResp,
 			)
 		}),
