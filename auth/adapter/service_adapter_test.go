@@ -133,7 +133,7 @@ func testAccessCheckerCases(t *testing.T, tests []accessTestCase) {
 			tt.setupMock(mockSvc)
 
 			checker := NewAccessChecker(mockSvc)
-			access, err := checker.CheckAccess(nil, tt.userID, tt.host, tt.path, tt.method)
+			access, err := checker.CheckAccess(context.Background(), tt.userID, tt.host, tt.path, tt.method)
 
 			if (err != nil) != tt.expectErr {
 				t.Errorf("Expected error: %v, got: %v", tt.expectErr, err)
@@ -247,7 +247,7 @@ func TestNewAccessCheckerFromCore(t *testing.T) {
 	require.NotNil(t, checker, "Expected non-nil AccessChecker")
 
 	// Test the checker
-	access, err := checker.CheckAccess(nil, 1, "example.com", "/api", "GET")
+	access, err := checker.CheckAccess(ctx, 1, "example.com", "/api", "GET")
 	require.NoError(t, err, "Unexpected error checking access")
 	require.True(t, access, "Expected CheckAccess to return true")
 

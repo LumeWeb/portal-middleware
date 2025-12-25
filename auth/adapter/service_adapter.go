@@ -31,7 +31,7 @@ var (
 // - bool: True if account exists
 // - error: Any error encountered during the check
 func (c *coreUserChecker) AccountExists(ctx context.Context, userID uint) (bool, error) {
-	exists, _, err := c.userService.AccountExists(userID)
+	exists, _, err := c.userService.AccountExists(ctx, userID)
 	return exists, err
 }
 
@@ -41,7 +41,7 @@ func (c *coreUserChecker) AccountExists(ctx context.Context, userID uint) (bool,
 // - bool: True if account is fully verified
 // - error: Any error encountered during verification check
 func (c *coreUserChecker) IsAccountVerified(ctx context.Context, userID uint) (bool, error) {
-	return c.userService.IsAccountVerified(userID)
+	return c.userService.IsAccountVerified(ctx, userID)
 }
 
 // CheckAccess verifies if a user is authorized to access a specific resource.
@@ -55,7 +55,7 @@ func (c *coreUserChecker) IsAccountVerified(ctx context.Context, userID uint) (b
 // - bool: True if access is granted
 // - error: Any error encountered during access check
 func (c *coreAccessChecker) CheckAccess(ctx context.Context, userID uint, host string, path string, method string) (bool, error) {
-	return c.accessService.CheckAccess(userID, host, path, method)
+	return c.accessService.CheckAccess(ctx, userID, host, path, method)
 }
 
 // NewUserChecker creates a new UserChecker from core.UserService
