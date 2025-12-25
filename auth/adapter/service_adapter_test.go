@@ -1,10 +1,12 @@
 package adapter
 
 import (
+	"context"
 	"errors"
+	"testing"
+
 	"go.lumeweb.com/portal/db/models"
 	"gorm.io/gorm"
-	"testing"
 
 	"go.lumeweb.com/portal/core"
 	coreTesting "go.lumeweb.com/portal/core/testing"
@@ -73,7 +75,7 @@ func TestUserCheckerAccountExists(t *testing.T) {
 	}
 
 	testUserCheckerCases(t, tests, func(mockSvc *coreMocks.MockUserService, userID uint) (bool, error) {
-		return NewUserChecker(mockSvc).AccountExists(userID)
+		return NewUserChecker(mockSvc).AccountExists(context.Background(), userID)
 	})
 }
 
@@ -109,7 +111,7 @@ func TestUserCheckerIsAccountVerified(t *testing.T) {
 	}
 
 	testUserCheckerCases(t, tests, func(mockSvc *coreMocks.MockUserService, userID uint) (bool, error) {
-		return NewUserChecker(mockSvc).IsAccountVerified(userID)
+		return NewUserChecker(mockSvc).IsAccountVerified(context.Background(), userID)
 	})
 }
 
@@ -131,7 +133,7 @@ func testAccessCheckerCases(t *testing.T, tests []accessTestCase) {
 			tt.setupMock(mockSvc)
 
 			checker := NewAccessChecker(mockSvc)
-			access, err := checker.CheckAccess(tt.userID, tt.host, tt.path, tt.method)
+			access, err := checker.CheckAccess(nil, tt.userID, tt.host, tt.path, tt.method)
 
 			if (err != nil) != tt.expectErr {
 				t.Errorf("Expected error: %v, got: %v", tt.expectErr, err)
@@ -212,11 +214,11 @@ func TestNewUserCheckerFromCore(t *testing.T) {
 	require.NotNil(t, checker, "Expected non-nil UserChecker")
 
 	// Test the checker
-	exists, err := checker.AccountExists(1)
+	exists, err := checker.AccountExists(ctx, 1)
 	require.NoError(t, err, "Unexpected error checking account existence")
 	require.True(t, exists, "Expected AccountExists to return true")
 
-	verified, err := checker.IsAccountVerified(1)
+	verified, err := checker.IsAccountVerified(ctx, 1)
 	require.NoError(t, err, "Unexpected error checking account verification")
 	require.True(t, verified, "Expected IsAccountVerified to return true")
 
@@ -245,7 +247,7 @@ func TestNewAccessCheckerFromCore(t *testing.T) {
 	require.NotNil(t, checker, "Expected non-nil AccessChecker")
 
 	// Test the checker
-	access, err := checker.CheckAccess(1, "example.com", "/api", "GET")
+	access, err := checker.CheckAccess(nil, 1, "example.com", "/api", "GET")
 	require.NoError(t, err, "Unexpected error checking access")
 	require.True(t, access, "Expected CheckAccess to return true")
 

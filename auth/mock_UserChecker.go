@@ -5,6 +5,8 @@
 package auth
 
 import (
+	"context"
+
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -36,8 +38,8 @@ func (_m *MockUserChecker) EXPECT() *MockUserChecker_Expecter {
 }
 
 // AccountExists provides a mock function for the type MockUserChecker
-func (_mock *MockUserChecker) AccountExists(userID uint) (bool, error) {
-	ret := _mock.Called(userID)
+func (_mock *MockUserChecker) AccountExists(ctx context.Context, userID uint) (bool, error) {
+	ret := _mock.Called(ctx, userID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for AccountExists")
@@ -45,16 +47,16 @@ func (_mock *MockUserChecker) AccountExists(userID uint) (bool, error) {
 
 	var r0 bool
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(uint) (bool, error)); ok {
-		return returnFunc(userID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint) (bool, error)); ok {
+		return returnFunc(ctx, userID)
 	}
-	if returnFunc, ok := ret.Get(0).(func(uint) bool); ok {
-		r0 = returnFunc(userID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint) bool); ok {
+		r0 = returnFunc(ctx, userID)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
-	if returnFunc, ok := ret.Get(1).(func(uint) error); ok {
-		r1 = returnFunc(userID)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uint) error); ok {
+		r1 = returnFunc(ctx, userID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -67,19 +69,25 @@ type MockUserChecker_AccountExists_Call struct {
 }
 
 // AccountExists is a helper method to define mock.On call
+//   - ctx context.Context
 //   - userID uint
-func (_e *MockUserChecker_Expecter) AccountExists(userID interface{}) *MockUserChecker_AccountExists_Call {
-	return &MockUserChecker_AccountExists_Call{Call: _e.mock.On("AccountExists", userID)}
+func (_e *MockUserChecker_Expecter) AccountExists(ctx interface{}, userID interface{}) *MockUserChecker_AccountExists_Call {
+	return &MockUserChecker_AccountExists_Call{Call: _e.mock.On("AccountExists", ctx, userID)}
 }
 
-func (_c *MockUserChecker_AccountExists_Call) Run(run func(userID uint)) *MockUserChecker_AccountExists_Call {
+func (_c *MockUserChecker_AccountExists_Call) Run(run func(ctx context.Context, userID uint)) *MockUserChecker_AccountExists_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 uint
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(uint)
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uint
+		if args[1] != nil {
+			arg1 = args[1].(uint)
 		}
 		run(
 			arg0,
+			arg1,
 		)
 	})
 	return _c
@@ -90,14 +98,14 @@ func (_c *MockUserChecker_AccountExists_Call) Return(b bool, err error) *MockUse
 	return _c
 }
 
-func (_c *MockUserChecker_AccountExists_Call) RunAndReturn(run func(userID uint) (bool, error)) *MockUserChecker_AccountExists_Call {
+func (_c *MockUserChecker_AccountExists_Call) RunAndReturn(run func(ctx context.Context, userID uint) (bool, error)) *MockUserChecker_AccountExists_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // IsAccountVerified provides a mock function for the type MockUserChecker
-func (_mock *MockUserChecker) IsAccountVerified(userID uint) (bool, error) {
-	ret := _mock.Called(userID)
+func (_mock *MockUserChecker) IsAccountVerified(ctx context.Context, userID uint) (bool, error) {
+	ret := _mock.Called(ctx, userID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for IsAccountVerified")
@@ -105,16 +113,16 @@ func (_mock *MockUserChecker) IsAccountVerified(userID uint) (bool, error) {
 
 	var r0 bool
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(uint) (bool, error)); ok {
-		return returnFunc(userID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint) (bool, error)); ok {
+		return returnFunc(ctx, userID)
 	}
-	if returnFunc, ok := ret.Get(0).(func(uint) bool); ok {
-		r0 = returnFunc(userID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint) bool); ok {
+		r0 = returnFunc(ctx, userID)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
-	if returnFunc, ok := ret.Get(1).(func(uint) error); ok {
-		r1 = returnFunc(userID)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uint) error); ok {
+		r1 = returnFunc(ctx, userID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -127,19 +135,25 @@ type MockUserChecker_IsAccountVerified_Call struct {
 }
 
 // IsAccountVerified is a helper method to define mock.On call
+//   - ctx context.Context
 //   - userID uint
-func (_e *MockUserChecker_Expecter) IsAccountVerified(userID interface{}) *MockUserChecker_IsAccountVerified_Call {
-	return &MockUserChecker_IsAccountVerified_Call{Call: _e.mock.On("IsAccountVerified", userID)}
+func (_e *MockUserChecker_Expecter) IsAccountVerified(ctx interface{}, userID interface{}) *MockUserChecker_IsAccountVerified_Call {
+	return &MockUserChecker_IsAccountVerified_Call{Call: _e.mock.On("IsAccountVerified", ctx, userID)}
 }
 
-func (_c *MockUserChecker_IsAccountVerified_Call) Run(run func(userID uint)) *MockUserChecker_IsAccountVerified_Call {
+func (_c *MockUserChecker_IsAccountVerified_Call) Run(run func(ctx context.Context, userID uint)) *MockUserChecker_IsAccountVerified_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 uint
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(uint)
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uint
+		if args[1] != nil {
+			arg1 = args[1].(uint)
 		}
 		run(
 			arg0,
+			arg1,
 		)
 	})
 	return _c
@@ -150,7 +164,7 @@ func (_c *MockUserChecker_IsAccountVerified_Call) Return(b bool, err error) *Moc
 	return _c
 }
 
-func (_c *MockUserChecker_IsAccountVerified_Call) RunAndReturn(run func(userID uint) (bool, error)) *MockUserChecker_IsAccountVerified_Call {
+func (_c *MockUserChecker_IsAccountVerified_Call) RunAndReturn(run func(ctx context.Context, userID uint) (bool, error)) *MockUserChecker_IsAccountVerified_Call {
 	_c.Call.Return(run)
 	return _c
 }

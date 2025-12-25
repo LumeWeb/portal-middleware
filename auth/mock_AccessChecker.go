@@ -5,6 +5,8 @@
 package auth
 
 import (
+	"context"
+
 	mock "github.com/stretchr/testify/mock"
 )
 
@@ -36,8 +38,8 @@ func (_m *MockAccessChecker) EXPECT() *MockAccessChecker_Expecter {
 }
 
 // CheckAccess provides a mock function for the type MockAccessChecker
-func (_mock *MockAccessChecker) CheckAccess(userID uint, host string, path string, method string) (bool, error) {
-	ret := _mock.Called(userID, host, path, method)
+func (_mock *MockAccessChecker) CheckAccess(ctx context.Context, userID uint, host string, path string, method string) (bool, error) {
+	ret := _mock.Called(ctx, userID, host, path, method)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CheckAccess")
@@ -45,16 +47,16 @@ func (_mock *MockAccessChecker) CheckAccess(userID uint, host string, path strin
 
 	var r0 bool
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(uint, string, string, string) (bool, error)); ok {
-		return returnFunc(userID, host, path, method)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint, string, string, string) (bool, error)); ok {
+		return returnFunc(ctx, userID, host, path, method)
 	}
-	if returnFunc, ok := ret.Get(0).(func(uint, string, string, string) bool); ok {
-		r0 = returnFunc(userID, host, path, method)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uint, string, string, string) bool); ok {
+		r0 = returnFunc(ctx, userID, host, path, method)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
-	if returnFunc, ok := ret.Get(1).(func(uint, string, string, string) error); ok {
-		r1 = returnFunc(userID, host, path, method)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, uint, string, string, string) error); ok {
+		r1 = returnFunc(ctx, userID, host, path, method)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -67,23 +69,24 @@ type MockAccessChecker_CheckAccess_Call struct {
 }
 
 // CheckAccess is a helper method to define mock.On call
+//   - ctx context.Context
 //   - userID uint
 //   - host string
 //   - path string
 //   - method string
-func (_e *MockAccessChecker_Expecter) CheckAccess(userID interface{}, host interface{}, path interface{}, method interface{}) *MockAccessChecker_CheckAccess_Call {
-	return &MockAccessChecker_CheckAccess_Call{Call: _e.mock.On("CheckAccess", userID, host, path, method)}
+func (_e *MockAccessChecker_Expecter) CheckAccess(ctx interface{}, userID interface{}, host interface{}, path interface{}, method interface{}) *MockAccessChecker_CheckAccess_Call {
+	return &MockAccessChecker_CheckAccess_Call{Call: _e.mock.On("CheckAccess", ctx, userID, host, path, method)}
 }
 
-func (_c *MockAccessChecker_CheckAccess_Call) Run(run func(userID uint, host string, path string, method string)) *MockAccessChecker_CheckAccess_Call {
+func (_c *MockAccessChecker_CheckAccess_Call) Run(run func(ctx context.Context, userID uint, host string, path string, method string)) *MockAccessChecker_CheckAccess_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 uint
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(uint)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 uint
 		if args[1] != nil {
-			arg1 = args[1].(string)
+			arg1 = args[1].(uint)
 		}
 		var arg2 string
 		if args[2] != nil {
@@ -93,11 +96,16 @@ func (_c *MockAccessChecker_CheckAccess_Call) Run(run func(userID uint, host str
 		if args[3] != nil {
 			arg3 = args[3].(string)
 		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
 		run(
 			arg0,
 			arg1,
 			arg2,
 			arg3,
+			arg4,
 		)
 	})
 	return _c
@@ -108,7 +116,7 @@ func (_c *MockAccessChecker_CheckAccess_Call) Return(b bool, err error) *MockAcc
 	return _c
 }
 
-func (_c *MockAccessChecker_CheckAccess_Call) RunAndReturn(run func(userID uint, host string, path string, method string) (bool, error)) *MockAccessChecker_CheckAccess_Call {
+func (_c *MockAccessChecker_CheckAccess_Call) RunAndReturn(run func(ctx context.Context, userID uint, host string, path string, method string) (bool, error)) *MockAccessChecker_CheckAccess_Call {
 	_c.Call.Return(run)
 	return _c
 }

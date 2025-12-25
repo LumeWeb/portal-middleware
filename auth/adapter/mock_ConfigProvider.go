@@ -261,3 +261,47 @@ func (_c *MockConfigProvider_GetPrivateKey_Call) RunAndReturn(run func() ed25519
 	_c.Call.Return(run)
 	return _c
 }
+
+// Secure provides a mock function for the type MockConfigProvider
+func (_mock *MockConfigProvider) Secure() bool {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Secure")
+	}
+
+	var r0 bool
+	if returnFunc, ok := ret.Get(0).(func() bool); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	return r0
+}
+
+// MockConfigProvider_Secure_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Secure'
+type MockConfigProvider_Secure_Call struct {
+	*mock.Call
+}
+
+// Secure is a helper method to define mock.On call
+func (_e *MockConfigProvider_Expecter) Secure() *MockConfigProvider_Secure_Call {
+	return &MockConfigProvider_Secure_Call{Call: _e.mock.On("Secure")}
+}
+
+func (_c *MockConfigProvider_Secure_Call) Run(run func()) *MockConfigProvider_Secure_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockConfigProvider_Secure_Call) Return(b bool) *MockConfigProvider_Secure_Call {
+	_c.Call.Return(b)
+	return _c
+}
+
+func (_c *MockConfigProvider_Secure_Call) RunAndReturn(run func() bool) *MockConfigProvider_Secure_Call {
+	_c.Call.Return(run)
+	return _c
+}

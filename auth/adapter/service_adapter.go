@@ -1,6 +1,8 @@
 package adapter
 
 import (
+	"context"
+
 	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal/core"
 )
@@ -28,7 +30,7 @@ var (
 // Returns:
 // - bool: True if account exists
 // - error: Any error encountered during the check
-func (c *coreUserChecker) AccountExists(userID uint) (bool, error) {
+func (c *coreUserChecker) AccountExists(ctx context.Context, userID uint) (bool, error) {
 	exists, _, err := c.userService.AccountExists(userID)
 	return exists, err
 }
@@ -38,7 +40,7 @@ func (c *coreUserChecker) AccountExists(userID uint) (bool, error) {
 // Returns:
 // - bool: True if account is fully verified
 // - error: Any error encountered during verification check
-func (c *coreUserChecker) IsAccountVerified(userID uint) (bool, error) {
+func (c *coreUserChecker) IsAccountVerified(ctx context.Context, userID uint) (bool, error) {
 	return c.userService.IsAccountVerified(userID)
 }
 
@@ -52,7 +54,7 @@ func (c *coreUserChecker) IsAccountVerified(userID uint) (bool, error) {
 // Returns:
 // - bool: True if access is granted
 // - error: Any error encountered during access check
-func (c *coreAccessChecker) CheckAccess(userID uint, host string, path string, method string) (bool, error) {
+func (c *coreAccessChecker) CheckAccess(ctx context.Context, userID uint, host string, path string, method string) (bool, error) {
 	return c.accessService.CheckAccess(userID, host, path, method)
 }
 
@@ -76,12 +78,14 @@ func NewAccessChecker(accessService core.AccessService) auth.AccessChecker {
 //	ctx := core.GetContext()
 //	checker := adapter.NewUserCheckerFromCore(ctx)
 func NewUserCheckerFromCore(ctx core.Context) auth.UserChecker {
-	userService := ctx.Service(core.USER_SERVICE).(core.UserService)
+	userService := core.GetService[core.UserService](ctx, core.USER_SERVICE)
+
 	return NewUserChecker(userService)
 }
 
 // NewAccessCheckerFromCore creates a new AccessChecker from core.Context
 func NewAccessCheckerFromCore(ctx core.Context) auth.AccessChecker {
-	accessService := ctx.Service(core.ACCESS_SERVICE).(core.AccessService)
+	accessService := core.GetService[core.AccessService](ctx, core.ACCESS_SERVICE)
+
 	return NewAccessChecker(accessService)
 }
