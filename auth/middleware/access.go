@@ -18,7 +18,7 @@ func AccessMiddleware(checker auth.UserChecker, accessChecker auth.AccessChecker
 				return echo.ErrUnauthorized
 			}
 
-			exists, err := checker.AccountExists(userID)
+			exists, err := checker.AccountExists(r.Context(), userID)
 			if err != nil || !exists {
 				return echo.ErrUnauthorized
 			}
@@ -27,7 +27,7 @@ func AccessMiddleware(checker auth.UserChecker, accessChecker auth.AccessChecker
 			if host == "" {
 				host = "localhost" // default if no host header
 			}
-			ok, err := accessChecker.CheckAccess(userID, host, c.Path(), r.Method)
+			ok, err := accessChecker.CheckAccess(r.Context(), userID, host, c.Path(), r.Method)
 			if err != nil {
 				return echo.ErrInternalServerError
 			}

@@ -79,6 +79,52 @@ func (_c *MockCookieSetter_ClearJWTCookie_Call) RunAndReturn(run func(w http.Res
 	return _c
 }
 
+// Config provides a mock function for the type MockCookieSetter
+func (_mock *MockCookieSetter) Config() ConfigProvider {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Config")
+	}
+
+	var r0 ConfigProvider
+	if returnFunc, ok := ret.Get(0).(func() ConfigProvider); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(ConfigProvider)
+		}
+	}
+	return r0
+}
+
+// MockCookieSetter_Config_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Config'
+type MockCookieSetter_Config_Call struct {
+	*mock.Call
+}
+
+// Config is a helper method to define mock.On call
+func (_e *MockCookieSetter_Expecter) Config() *MockCookieSetter_Config_Call {
+	return &MockCookieSetter_Config_Call{Call: _e.mock.On("Config")}
+}
+
+func (_c *MockCookieSetter_Config_Call) Run(run func()) *MockCookieSetter_Config_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockCookieSetter_Config_Call) Return(configProvider ConfigProvider) *MockCookieSetter_Config_Call {
+	_c.Call.Return(configProvider)
+	return _c
+}
+
+func (_c *MockCookieSetter_Config_Call) RunAndReturn(run func() ConfigProvider) *MockCookieSetter_Config_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // EchoAuthCookie provides a mock function for the type MockCookieSetter
 func (_mock *MockCookieSetter) EchoAuthCookie(w http.ResponseWriter, r *http.Request, opts ...jwt.Option) {
 	// jwt.Option

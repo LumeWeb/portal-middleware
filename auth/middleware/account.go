@@ -17,7 +17,7 @@ func AccountVerified(checker auth.UserChecker) echo.MiddlewareFunc {
 				return echo.ErrUnauthorized
 			}
 
-			verified, err := checker.IsAccountVerified(userID)
+			verified, err := checker.IsAccountVerified(c.Request().Context(), userID)
 			if err != nil {
 				return echo.ErrInternalServerError
 			}
