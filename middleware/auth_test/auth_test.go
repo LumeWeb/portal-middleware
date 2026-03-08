@@ -32,13 +32,9 @@ func TestAuthMiddleware(t *testing.T) {
 
 	cfg := ctx.Config()
 	err = cfg.Set(ctx, "core.domain", "test.example.com")
-	if err != nil {
-		t.Error(t)
-	}
+	require.NoError(t, err, "Failed to set test domain")
 	err = cfg.Set(ctx, "core.identity", wallet.NewSeedPhrase())
-	if err != nil {
-		t.Error(t)
-	}
+	require.NoError(t, err, "Failed to set test identity")
 
 	t.Run("valid token", func(t *testing.T) {
 		mw := middleware.AuthMiddleware(ctx, middleware.WithAuthPurpose(jwt.Purpose("test-purpose")))

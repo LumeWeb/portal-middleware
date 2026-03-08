@@ -48,7 +48,7 @@ func TestCoreCookieSetter(t *testing.T) {
 
 	mockConfig.On("GetPrivateKey").Return(privKey)
 	mockConfig.On("GetDomain").Return("example.com")
-	mockConfig.On("GetAuthCookieName").Return("auth_token")
+	mockConfig.On("GetAuthCookieName").Return(core.AUTH_COOKIE_NAME)
 	mockConfig.On("Secure").Return(true).Maybe()
 
 	setter := adapter.NewCookieSetter(mockConfig)
@@ -64,7 +64,7 @@ func TestCoreCookieSetter(t *testing.T) {
 		require.Len(t, cookies, 1, "Should set one cookie")
 
 		cookie := cookies[0]
-		assert.Equal(t, "auth_token", cookie.Name)
+		assert.Equal(t, core.AUTH_COOKIE_NAME, cookie.Name)
 		assert.Equal(t, token, cookie.Value)
 		assert.WithinDuration(t, time.Now().Add(time.Hour), cookie.Expires, time.Second)
 	})
@@ -77,7 +77,7 @@ func TestCoreCookieSetter(t *testing.T) {
 		require.Len(t, cookies, 1, "Should set one cookie")
 
 		cookie := cookies[0]
-		assert.Equal(t, "auth_token", cookie.Name)
+		assert.Equal(t, core.AUTH_COOKIE_NAME, cookie.Name)
 		assert.Equal(t, "", cookie.Value)
 		assert.Equal(t, -1, cookie.MaxAge)
 	})
@@ -173,14 +173,10 @@ func TestMultiCoreSetterFromCore(t *testing.T) {
 		mainCookie := echoCookies[0]
 		assert.Equal(t, "main.example.com", mainCookie.Domain)
 		decodedJwt, err := jwt.DecodeToken(mainCookie.Value, &gjwt.RegisteredClaims{})
-		if err != nil {
-			t.Error(err)
-		}
+		require.NoError(t, err, "Failed to decode JWT token")
 		issuer, err := decodedJwt.GetIssuer()
-		if err != nil {
-			t.Error(err)
-		}
-		assert.Equal(t, issuer, "main.example.com")
+		require.NoError(t, err, "Failed to get issuer from JWT")
+		assert.Equal(t, "main.example.com", issuer)
 		// Verify API subdomain cookies
 		api1Cookie := echoCookies[1]
 		assert.Equal(t, "api1.example.com", api1Cookie.Domain)

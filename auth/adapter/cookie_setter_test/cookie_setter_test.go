@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	adapter "go.lumeweb.com/portal-middleware/auth/adapter"
+	"go.lumeweb.com/portal/core"
 	coreTesting "go.lumeweb.com/portal/core/testing"
 )
 
@@ -22,7 +23,7 @@ func TestCookieSetter(t *testing.T) {
 
 	// Setup mock expectations
 	mockConfig.On("GetDomain").Return("test.com")
-	mockConfig.On("GetAuthCookieName").Return("auth_token")
+	mockConfig.On("GetAuthCookieName").Return(core.AUTH_COOKIE_NAME)
 	mockConfig.On("GetCtx").Return(ctx)
 	mockConfig.On("Secure").Return(true).Maybe()
 
@@ -50,7 +51,7 @@ func TestCookieSetter(t *testing.T) {
 		require.Len(t, cookies, 1, "Should set one cookie")
 
 		cookie := cookies[0]
-		assert.Equal(t, "auth_token", cookie.Name)
+		assert.Equal(t, core.AUTH_COOKIE_NAME, cookie.Name)
 		assert.Equal(t, token, cookie.Value)
 		assert.WithinDuration(t, time.Now().Add(time.Hour), cookie.Expires, time.Second)
 	})
@@ -63,7 +64,7 @@ func TestCookieSetter(t *testing.T) {
 		require.Len(t, cookies, 1, "Should set one cookie")
 
 		cookie := cookies[0]
-		assert.Equal(t, "auth_token", cookie.Name)
+		assert.Equal(t, core.AUTH_COOKIE_NAME, cookie.Name)
 		assert.Equal(t, "", cookie.Value)
 		assert.Equal(t, -1, cookie.MaxAge)
 	})
@@ -88,7 +89,7 @@ func TestCookieSetter(t *testing.T) {
 		echoCookies := echoW.Result().Cookies()
 		require.Len(t, echoCookies, 1)
 		echoCookie := echoCookies[0]
-		assert.Equal(t, "auth_token", echoCookie.Name)
+		assert.Equal(t, core.AUTH_COOKIE_NAME, echoCookie.Name)
 		assert.Equal(t, token, echoCookie.Value)
 		assert.Equal(t, "main.example.com", echoCookie.Domain)
 	})
@@ -97,7 +98,7 @@ func TestCookieSetter(t *testing.T) {
 		// Create request with invalid cookie
 		req := httptest.NewRequest("GET", "/", nil)
 		req.AddCookie(&http.Cookie{
-			Name:  "auth_token",
+			Name:  core.AUTH_COOKIE_NAME,
 			Value: "invalid.token",
 		})
 
