@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"net"
+
 	"github.com/labstack/echo/v4"
 	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal-middleware/context"
@@ -27,7 +29,11 @@ func AccessMiddleware(checker auth.UserChecker, accessChecker auth.AccessChecker
 			if host == "" {
 				host = "localhost" // default if no host header
 			}
-			ok, err := accessChecker.CheckAccess(r.Context(), userID, host, c.Path(), r.Method)
+			// Strip port from host to match registered FQDN policies
+			if h, _, err := net.SplitHostPort(host); err == nil {
+				host = h
+			}
+			ok, err := accessChecker.CheckAccess(r.Context(), userID, host, c.Request().URL.Path, r.Method)
 			if err != nil {
 				return echo.ErrInternalServerError
 			}
