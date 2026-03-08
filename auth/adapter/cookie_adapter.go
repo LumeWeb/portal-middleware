@@ -51,7 +51,7 @@ func MultiCoreSetterFromCore(ctx core.Context) CookieSetter {
 	// Create API setters with explicit domain handling
 	var apiSetters []CookieSetter
 	for _, domain := range NewAPIProvider().GetAPIs() {
-		apiSetters = append(apiSetters, newDomainCookieSetter(mainSetter, domain))
+		apiSetters = append(apiSetters, NewDomainCookieSetter(mainSetter, domain))
 	}
 
 	return NewChainedCookieSetter(append([]CookieSetter{mainSetter}, apiSetters...)...)
@@ -63,8 +63,8 @@ type domainCookieSetter struct {
 	domain string
 }
 
-// newDomainCookieSetter creates a new domainCookieSetter instance
-func newDomainCookieSetter(base CookieSetter, domain string) *domainCookieSetter {
+// NewDomainCookieSetter creates a new domainCookieSetter instance
+func NewDomainCookieSetter(base CookieSetter, domain string) *domainCookieSetter {
 	return &domainCookieSetter{
 		base:   base,
 		domain: domain,

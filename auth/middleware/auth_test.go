@@ -51,7 +51,7 @@ func TestAuthMiddleware(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:       mockConfig,
 			Validator:    mockValidator,
-			Purpose:      jwt.PurposeLogin,
+			Purposes: []jwt.Purpose{jwt.PurposeLogin},
 			EmptyAllowed: false,
 		})
 
@@ -97,7 +97,7 @@ func TestAuthMiddleware(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:    mockConfig,
 			Validator: mockValidator,
-			Purpose:   jwt.PurposeLogin,
+			Purposes: []jwt.Purpose{jwt.PurposeLogin},
 		})
 
 		rr := httptest.NewRecorder()
@@ -124,7 +124,7 @@ func TestAuthMiddleware(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
-			Purpose:        jwt.PurposeLogin,
+			Purposes: []jwt.Purpose{jwt.PurposeLogin},
 			EmptyAllowed:   false,
 			ExpiredAllowed: true,
 		})
@@ -150,7 +150,7 @@ func TestAuthMiddleware(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:    mockConfig,
 			Validator: mockValidator,
-			Purpose:   jwt.PurposeLogin,
+			Purposes: []jwt.Purpose{jwt.PurposeLogin},
 		})
 
 		rr := httptest.NewRecorder()
@@ -189,7 +189,7 @@ func TestAuthMiddleware(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
-			Purpose:        jwt.Purpose("test_purpose"),
+			Purposes: []jwt.Purpose{jwt.Purpose("test_purpose")},
 			EmptyAllowed:   false,
 			Options:        jwt.Options(jwt.WithClaims(&CustomClaims{})),
 			ExpectedClaims: &CustomClaims{},
@@ -224,7 +224,7 @@ func TestAuthMiddleware(t *testing.T) {
 		}()
 
 		AuthMiddleware(AuthMiddlewareOptions{
-			Purpose: "login",
+			Purposes: []jwt.Purpose{"login"},
 		})
 	})
 
@@ -272,7 +272,7 @@ func TestAuthMiddleware_DefaultRegisteredClaims(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
-			Purpose:        jwt.PurposeLogin,
+			Purposes: []jwt.Purpose{jwt.PurposeLogin},
 			ExpectedClaims: nil, // No expected claims specified
 		})
 
@@ -327,7 +327,7 @@ func TestAuthMiddleware_DefaultRegisteredClaims(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
-			Purpose:        jwt.PurposeLogin,
+			Purposes: []jwt.Purpose{jwt.PurposeLogin},
 			ExpectedClaims: nil, // No expected claims specified
 		})
 
@@ -399,7 +399,7 @@ func TestAuthMiddleware_CustomClaims(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
-			Purpose:        jwt.PurposeLogin,
+			Purposes: []jwt.Purpose{jwt.PurposeLogin},
 			Options:        jwt.Options(jwt.WithClaims(&CustomClaims{})),
 			ExpectedClaims: &CustomClaims{},
 		})
@@ -442,7 +442,7 @@ func TestAuthMiddleware_CustomClaims(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
-			Purpose:        jwt.PurposeLogin,
+			Purposes: []jwt.Purpose{jwt.PurposeLogin},
 			Options:        jwt.Options(jwt.WithClaims(&CustomClaims{})),
 			ExpectedClaims: &CustomClaims{},
 		})
@@ -491,7 +491,7 @@ func TestAuthMiddleware_ValidationErrors(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
-			Purpose:        jwt.PurposeLogin,
+			Purposes: []jwt.Purpose{jwt.PurposeLogin},
 			Options:        jwt.Options(jwt.WithClaims(&CustomClaims{})),
 			ExpectedClaims: &CustomClaims{},
 		})
@@ -519,7 +519,7 @@ func TestAuthMiddleware_ValidationErrors(t *testing.T) {
 		middleware := AuthMiddleware(AuthMiddlewareOptions{
 			Config:         mockConfig,
 			Validator:      mockValidator,
-			Purpose:        jwt.PurposeLogin,
+			Purposes: []jwt.Purpose{jwt.PurposeLogin},
 			Options:        jwt.Options(jwt.WithClaims(&CustomClaims{})),
 			ExpectedClaims: &CustomClaims{},
 		})

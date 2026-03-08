@@ -1,6 +1,7 @@
 package util
 
 import (
+	"context"
 	"go.lumeweb.com/portal-middleware/cors"
 	"go.sia.tech/coreutils/wallet"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	coreTesting "go.lumeweb.com/portal/core/testing"
 )
 
@@ -34,15 +36,19 @@ func TestMiddlewareChain(t *testing.T) {
 	})
 
 	t.Run("with auth middleware", func(t *testing.T) {
-		ctx := coreTesting.NewTestContext(t)
+		testCtx, err := coreTesting.NewTestContext(t)
+		require.NoError(t, err)
+
 		seedPhrase := wallet.NewSeedPhrase()
-		cfg := ctx.Config().Config()
-		err := cfg.Core.Identity.DecodeMapstructure(seedPhrase)
+
+		// Set domain
+		err = testCtx.Config().Set(context.Background(), "core.domain", "test.com")
 		if err != nil {
 			t.Error(err)
 		}
-		// Set domain
-		err = ctx.Config().Update("Core.Domain", "test.com")
+
+		// Set seed
+		err = testCtx.Config().Set(context.Background(), "core.identity", seedPhrase)
 		if err != nil {
 			t.Error(err)
 		}
@@ -52,7 +58,7 @@ func TestMiddlewareChain(t *testing.T) {
 		})
 
 		mw := New(baseHandler).
-			WithAuthFromCore(ctx, "test")
+			WithAuthFromCore(testCtx, "test")
 
 		req := httptest.NewRequest("GET", "/", nil)
 		rr := httptest.NewRecorder()
