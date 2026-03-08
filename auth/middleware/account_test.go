@@ -3,6 +3,7 @@ package middleware
 import (
 	"context"
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.lumeweb.com/portal-middleware/auth"
 	"net/http"
@@ -18,7 +19,7 @@ func TestAccountVerifiedMiddleware(t *testing.T) {
 	middleware := AccountVerified(mockChecker)
 
 	t.Run("verified user", func(t *testing.T) {
-		mockChecker.On("IsAccountVerified", uint(1)).Return(true, nil)
+		mockChecker.On("IsAccountVerified", mock.Anything, uint(1)).Return(true, nil)
 
 		req := httptest.NewRequest("GET", "/", nil)
 		req = req.WithContext(context.WithValue(req.Context(), mcontext.UserIDKey, uint(1)))
@@ -36,7 +37,7 @@ func TestAccountVerifiedMiddleware(t *testing.T) {
 	})
 
 	t.Run("unverified user", func(t *testing.T) {
-		mockChecker.On("IsAccountVerified", uint(2)).Return(false, nil)
+		mockChecker.On("IsAccountVerified", mock.Anything, uint(2)).Return(false, nil)
 
 		e := echo.New()
 		req := httptest.NewRequest("GET", "/", nil)
@@ -63,7 +64,7 @@ func TestAccountVerifiedMiddleware(t *testing.T) {
 	})
 
 	t.Run("service error", func(t *testing.T) {
-		mockChecker.On("IsAccountVerified", uint(3)).Return(false, assert.AnError)
+		mockChecker.On("IsAccountVerified", mock.Anything, uint(3)).Return(false, assert.AnError)
 
 		e := echo.New()
 		req := httptest.NewRequest("GET", "/", nil)
