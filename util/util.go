@@ -42,7 +42,7 @@ func (m *Middleware) Then() http.Handler {
 func (m *Middleware) WithAuth(config adapter.ConfigProvider, purpose jwt.Purpose) *Middleware {
 	opts := middleware.NewAuthOptions(
 		config,
-		[]jwt.Purpose{purpose},
+		middleware.WithPurpose(purpose),
 	)
 	return m.Chain(convert.Unwrap(middleware.AuthMiddleware(*opts)))
 }
