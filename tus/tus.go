@@ -158,16 +158,7 @@ func CorsMiddleware() func(h http.Handler) http.Handler {
 	}).Handler
 }
 
-// dummyOptionsHandler is a placeholder handler for OPTIONS requests at the basePath.
-// The CORS middleware is expected to handle the response before this handler is reached.
-func dummyOptionsHandler(c echo.Context) error {
-	// This handler should ideally not be reached for CORS preflight requests
-	// because the CorsMiddleware should handle them and write the response.
-	// If it is reached, it means the CORS middleware didn't handle the request,
-	// or it's a non-preflight OPTIONS request.
-	// Returning 204 No Content is standard for OPTIONS if not handled by CORS.
-	return c.NoContent(http.StatusNoContent)
-}
+
 
 // RegisterTusRoutes registers TUS protocol routes using the router builder API.
 // It handles middleware chaining, access control registration and swagger documentation.
@@ -265,20 +256,9 @@ func RegisterTusRoutes(
 	optionsRoute := buildIDRouteOptions(http.MethodOptions, basePath+idPathSuffix, router.TusOptionsSwagger)
 	routes = append(routes, optionsRoute)
 
-	// Add base path OPTIONS route (no ID) - for CORS preflight on base path
-	optionsBaseRoute := router.NewRoute(
-		http.MethodOptions,
-		basePath,
-		dummyOptionsHandler,
-		router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
-			*d = router.TusOptionsSwagger(
-				"Get TUS Server Capabilities",
-				"Retrieves information about the TUS server's supported versions, extensions, and limits.",
-				commonErrResp,
-			)
-		}),
-		router.WithMiddlewares(mw...),
-	)
+	// Add OPTIONS route (base path, no ID) - for server capabilities discovery
+	// Forward OPTIONS to the actual TUS handler which returns appropriate protocol headers
+	optionsBaseRoute := buildRouteOptions(http.MethodOptions, basePath, router.TusOptionsSwagger)
 	routes = append(routes, optionsBaseRoute)
 
 	routes = router.DefineRoutes(routes...)
