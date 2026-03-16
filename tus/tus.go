@@ -250,10 +250,15 @@ func RegisterTusRoutes(
 		basePath+idPathSuffix,
 		tusHandler,
 		router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
-			*d = router.TusOptionsSwagger(
-				"Get TUS Upload Capabilities",
-				"Retrieves information about the TUS server's supported versions, extensions, and limits.",
-				commonErrResp,
+			*d = router.SwaggerPathParam(
+				router.TusOptionsSwagger(
+					"Get TUS Upload Capabilities",
+					"Retrieves information about the TUS server's supported versions, extensions, and limits.",
+					commonErrResp,
+				),
+				"id",
+				"The ID of the upload resource.",
+				"string",
 			)
 		}),
 		router.WithMiddlewares(mw...),
