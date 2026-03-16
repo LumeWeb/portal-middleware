@@ -221,15 +221,6 @@ func RegisterTusRoutes(
 		return router.NewRoute(method, path, tusHandler, opts...)
 	}
 
-	// Helper to build route options with ID path parameter
-	buildIDRouteOptions := func(method string, path string, swaggerFn func(string, string, map[int]any) swagger.Definitions) router.RouteDefinition {
-		return buildRouteOptions(method, path, func(summary, description string, errResp map[int]any) swagger.Definitions {
-			def := swaggerFn(summary, description, errResp)
-			// Add ID path parameter for this route
-			return router.SwaggerPathParam(def, "id", "The ID of the upload resource.", "string")
-		})
-	}
-
 	idPathSuffix := "/:id"
 
 	// Build main routes explicitly
@@ -253,12 +244,38 @@ func RegisterTusRoutes(
 	}
 
 	// Add OPTIONS route (with ID) - for CORS preflight on specific uploads
-	optionsRoute := buildIDRouteOptions(http.MethodOptions, basePath+idPathSuffix, router.TusOptionsSwagger)
+	// Note: OPTIONS must not require auth for CORS preflight compatibility
+	optionsRoute := router.NewRoute(
+		http.MethodOptions,
+		basePath+idPathSuffix,
+		tusHandler,
+		router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
+			*d = router.TusOptionsSwagger(
+				"Get TUS Upload Capabilities",
+				"Retrieves information about the TUS server's supported versions, extensions, and limits.",
+				commonErrResp,
+			)
+		}),
+		router.WithMiddlewares(mw...),
+	)
 	routes = append(routes, optionsRoute)
 
 	// Add OPTIONS route (base path, no ID) - for server capabilities discovery
 	// Forward OPTIONS to the actual TUS handler which returns appropriate protocol headers
-	optionsBaseRoute := buildRouteOptions(http.MethodOptions, basePath, router.TusOptionsSwagger)
+	// Note: OPTIONS must not require auth for CORS preflight compatibility
+	optionsBaseRoute := router.NewRoute(
+		http.MethodOptions,
+		basePath,
+		tusHandler,
+		router.WithSwaggerOptions(func(d *swagger.Definitions, _ string) {
+			*d = router.TusOptionsSwagger(
+				"Get TUS Server Capabilities",
+				"Retrieves information about the TUS server's supported versions, extensions, and limits.",
+				commonErrResp,
+			)
+		}),
+		router.WithMiddlewares(mw...),
+	)
 	routes = append(routes, optionsBaseRoute)
 
 	routes = router.DefineRoutes(routes...)
