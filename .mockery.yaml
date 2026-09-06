@@ -8,6 +8,7 @@ packages:
     interfaces:
       AccessChecker: {}
       UserChecker: {}
+      JWTKeyLogger: {}
   go.lumeweb.com/portal-middleware/auth/adapter:
     interfaces:
       APIProvider: {}
