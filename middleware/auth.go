@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"github.com/labstack/echo/v4"
+	"go.lumeweb.com/portal-middleware/auth"
 	"go.lumeweb.com/portal-middleware/auth/adapter"
 	"go.lumeweb.com/portal-middleware/auth/jwt"
 	"go.lumeweb.com/portal-middleware/auth/middleware"
@@ -66,4 +67,10 @@ type AuthErrorCallback = middleware.AuthErrorCallback
 // WithAuthErrorCallback sets a custom error callback function for authentication failures
 func WithAuthErrorCallback(callback AuthErrorCallback) AuthOption {
 	return middleware.WithErrorCallback(callback)
+}
+
+// WithAuthKeyLogger registers JWT key loggers that get notified whenever the
+// authentication middleware processes a token, so plugins can record JWT access.
+func WithAuthKeyLogger(loggers ...auth.JWTKeyLogger) AuthOption {
+	return middleware.WithKeyLogger(loggers...)
 }

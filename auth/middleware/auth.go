@@ -35,6 +35,7 @@ type AuthMiddlewareOptions struct {
 	Options        []jwt.Option
 	ExpectedClaims gjwt.Claims
 	ErrorCallback  AuthErrorCallback
+	KeyLoggers     []auth.JWTKeyLogger
 }
 
 // handleError processes authentication errors using the custom error callback if provided,
@@ -45,6 +46,21 @@ func (options *AuthMiddlewareOptions) handleError(c echo.Context) error {
 		return c.JSON(code, response)
 	}
 	return echo.ErrUnauthorized
+}
+
+// logTokenAccess notifies every registered JWTKeyLogger that a token was
+// processed. A faulty plugin logger must never fail the request, so panics
+// raised inside RecordAccess are recovered and discarded.
+func (options *AuthMiddlewareOptions) logTokenAccess(c echo.Context, token string, purpose jwt.Purpose, claims gjwt.Claims, err error) {
+	for _, logger := range options.KeyLoggers {
+		if logger == nil {
+			continue
+		}
+		func() {
+			defer func() { _ = recover() }()
+			logger.RecordAccess(c, token, purpose, claims, err)
+		}()
+	}
 }
 
 // AuthMiddleware creates Echo middleware for JWT authentication
@@ -86,8 +102,12 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 			var expiredBase *gjwt.RegisteredClaims
 			var expiredCustom gjwt.Claims
 			var sawExpired bool
+			// Purpose used for key logging: the successful purpose, or the last
+			// attempted one when all purposes failed.
+			var loggedPurpose jwt.Purpose
 
 			for _, purpose := range options.Purposes {
+				loggedPurpose = purpose
 				bc, cc, e := validator.ValidateWithClaims(authToken, purpose, claimsType)
 				if e == nil {
 					baseClaims, customClaims, err = bc, cc, nil
@@ -106,17 +126,20 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 				if sawExpired && expiredBase != nil {
 					baseClaims, customClaims = expiredBase, expiredCustom
 				} else {
+					options.logTokenAccess(c, authToken, loggedPurpose, nil, err)
 					return options.handleError(c)
 				}
 			}
 
 			// If validation passed but we got nil claims, reject
 			if baseClaims == nil {
+				options.logTokenAccess(c, authToken, loggedPurpose, nil, err)
 				return options.handleError(c)
 			}
 
 			// If we got claims but they don't match expected type, reject
 			if customClaims != nil && !reflect.TypeOf(customClaims).AssignableTo(reflect.TypeOf(claimsType)) {
+				options.logTokenAccess(c, authToken, loggedPurpose, customClaims, err)
 				return options.handleError(c)
 			}
 
@@ -124,6 +147,7 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 			if baseClaims != nil {
 				userID, err := strconv.ParseUint(baseClaims.Subject, 10, 64)
 				if err != nil {
+					options.logTokenAccess(c, authToken, loggedPurpose, baseClaims, err)
 					return options.handleError(c)
 				}
 				c.Set(string(mcontext.UserIDKey), uint(userID))
@@ -141,6 +165,7 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 						// Check if types match directly or via pointer
 						if !actualType.AssignableTo(expectedClaimsType) &&
 							!actualType.AssignableTo(expectedPtrType) {
+							options.logTokenAccess(c, authToken, loggedPurpose, customClaims, err)
 							return options.handleError(c)
 						}
 					}
@@ -164,6 +189,7 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 				}
 			}
 
+			options.logTokenAccess(c, authToken, loggedPurpose, baseClaims, nil)
 			return next(c)
 		}
 	}
@@ -244,5 +270,13 @@ func WithJWTOptions(jwtOpts ...jwt.Option) AuthMiddlewareOption {
 func WithErrorCallback(callback AuthErrorCallback) AuthMiddlewareOption {
 	return func(opts *AuthMiddlewareOptions) {
 		opts.ErrorCallback = callback
+	}
+}
+
+// WithKeyLogger registers JWT key loggers that get notified whenever the
+// middleware processes a token, so plugins can record JWT access.
+func WithKeyLogger(loggers ...auth.JWTKeyLogger) AuthMiddlewareOption {
+	return func(opts *AuthMiddlewareOptions) {
+		opts.KeyLoggers = append(opts.KeyLoggers, loggers...)
 	}
 }
