@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"github.com/samber/lo"
 	"reflect"
 	"strconv"
-	"github.com/samber/lo"
 
 	gjwt "github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
@@ -133,13 +134,15 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 
 			// If validation passed but we got nil claims, reject
 			if baseClaims == nil {
-				options.logTokenAccess(c, authToken, loggedPurpose, nil, err)
+				options.logTokenAccess(c, authToken, loggedPurpose, nil,
+					fmt.Errorf("validation passed but claims are nil: %w", jwt.ErrJWTInvalid))
 				return options.handleError(c)
 			}
 
 			// If we got claims but they don't match expected type, reject
 			if customClaims != nil && !reflect.TypeOf(customClaims).AssignableTo(reflect.TypeOf(claimsType)) {
-				options.logTokenAccess(c, authToken, loggedPurpose, customClaims, err)
+				options.logTokenAccess(c, authToken, loggedPurpose, customClaims,
+					fmt.Errorf("claims type mismatch: %T: %w", customClaims, jwt.ErrJWTUnexpectedClaimsType))
 				return options.handleError(c)
 			}
 
@@ -165,7 +168,8 @@ func AuthMiddleware(options AuthMiddlewareOptions) echo.MiddlewareFunc {
 						// Check if types match directly or via pointer
 						if !actualType.AssignableTo(expectedClaimsType) &&
 							!actualType.AssignableTo(expectedPtrType) {
-							options.logTokenAccess(c, authToken, loggedPurpose, customClaims, err)
+							options.logTokenAccess(c, authToken, loggedPurpose, customClaims,
+								fmt.Errorf("claims type mismatch: %T: %w", customClaims, jwt.ErrJWTUnexpectedClaimsType))
 							return options.handleError(c)
 						}
 					}

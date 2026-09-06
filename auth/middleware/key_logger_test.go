@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"go.lumeweb.com/portal-middleware/auth"
@@ -106,6 +107,25 @@ func TestAuthMiddlewareKeyLogger(t *testing.T) {
 
 		_, err := runRequestWithKeyLoggers(t, mockValidator, "valid.token", WithKeyLogger(logger))
 		require.NoError(t, err)
+	})
+
+	t.Run("rejection after successful validation logs a non-nil error", func(t *testing.T) {
+		_, mockValidator := setupAuthTest(t)
+
+		baseClaims := &gjwt.RegisteredClaims{Subject: "123"}
+		// Custom claims of unexpected type should cause a rejection after
+		// validation succeeded; the logger must see that rejection reason.
+		mockValidator.On("ValidateWithClaims", "valid.token", jwt.PurposeLogin, &gjwt.RegisteredClaims{}).
+			Return(baseClaims, &CustomClaims{}, nil).Once()
+
+		logger := auth.NewMockJWTKeyLogger(t)
+		logger.On("RecordAccess", mock.Anything, "valid.token", jwt.PurposeLogin, mock.Anything, mock.Anything).
+			Run(func(args mock.Arguments) {
+				assert.Error(t, args.Get(4).(error))
+			}).Once()
+
+		_, err := runRequestWithKeyLoggers(t, mockValidator, "valid.token", WithKeyLogger(logger))
+		require.Error(t, err)
 	})
 
 	t.Run("all registered loggers are invoked in order", func(t *testing.T) {
